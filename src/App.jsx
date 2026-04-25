@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { Home } from './modules/home/Home'
@@ -17,39 +17,57 @@ export default function App() {
   const user = useStore((s) => s.user)
   const setUser = useStore((s) => s.setUser)
   const setVehicles = useStore((s) => s.setVehicles)
+  const realtimeChannel = useRef(null)
+
+  // Charge les véhicules depuis Supabase (source de vérité)
+  async function loadFromSupabase() {
+    try {
+      const vehicles = await fetchVehicles()
+      setVehicles(vehicles) // Toujours écraser le cache local avec Supabase
+    } catch (err) {
+      // Supabase injoignable → le cache localStorage (Zustand persist) reste actif
+      console.warn('Supabase unavailable, using local cache:', err.message)
+    }
+  }
+
+  // Abonnement Realtime : toute modification sur la table vehicles
+  // déclenche un rechargement sur tous les appareils connectés
+  function subscribeRealtime() {
+    if (realtimeChannel.current) supabase.removeChannel(realtimeChannel.current)
+    realtimeChannel.current = supabase
+      .channel('vehicles-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => {
+        loadFromSupabase()
+      })
+      .subscribe()
+  }
 
   useEffect(() => {
     // Vérifie la session existante au démarrage
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setUser(u)
-      if (u) loadFromSupabase()
+      if (u) { loadFromSupabase(); subscribeRealtime() }
     })
 
-    // Synchronise les changements d'état d'auth en temps réel
+    // Écoute les changements d'état d'auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUser(u)
-      if (u) loadFromSupabase()
+      if (u) { loadFromSupabase(); subscribeRealtime() }
+      if (!u && realtimeChannel.current) {
+        supabase.removeChannel(realtimeChannel.current)
+        realtimeChannel.current = null
+      }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      if (realtimeChannel.current) supabase.removeChannel(realtimeChannel.current)
+    }
   }, [])
 
-  async function loadFromSupabase() {
-    try {
-      const vehicles = await fetchVehicles()
-      if (vehicles.length > 0) setVehicles(vehicles)
-    } catch (err) {
-      // Supabase indisponible → on garde le cache localStorage (Zustand persist)
-      console.warn('Supabase unavailable, using local cache:', err.message)
-    }
-  }
-
-  // Session en cours de vérification → écran vide (évite le flash Login sur refresh)
   if (user === undefined) return null
-
-  // Non connecté → écran de login
   if (user === null) return <Login />
 
   return (
