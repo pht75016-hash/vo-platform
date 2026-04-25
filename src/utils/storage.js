@@ -43,20 +43,27 @@ function migrateVehicles(data) {
 }
 
 // ── Supabase CRUD ──────────────────────────────────────────────────────────
-// Schéma minimal requis : vehicles(id text PK, data jsonb)
+// Schéma : vehicles(id text PK, user_id uuid FK, data jsonb, updated_at timestamptz)
+// RLS    : auth.uid() = user_id  →  user_id doit être fourni dans chaque upsert
 
 export async function fetchVehicles() {
   const { data, error } = await supabase
     .from('vehicles')
     .select('data')
+    .order('updated_at', { ascending: false })
   if (error) throw error
   return data.map(row => row.data)
 }
 
-export async function upsertVehicle(vehicle) {
+export async function upsertVehicle(vehicle, userId) {
   const { error } = await supabase
     .from('vehicles')
-    .upsert({ id: vehicle.id, data: vehicle })
+    .upsert({
+      id: vehicle.id,
+      user_id: userId,
+      data: vehicle,
+      updated_at: new Date().toISOString(),
+    })
   if (error) throw error
 }
 

@@ -15,22 +15,25 @@ export const useStore = create(persist(
 
     addVehicle: (v) => {
       set((s) => ({ vehicles: [v, ...s.vehicles] }))
-      if (get().user) upsertVehicle(v).catch(console.error)
+      const uid = get().user?.id
+      if (uid) upsertVehicle(v, uid).catch(console.error)
     },
 
     updateVehicle: (id, data) => {
       set((s) => ({
         vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...data } : v),
       }))
-      if (get().user) {
+      const uid = get().user?.id
+      if (uid) {
         const updated = get().vehicles.find((v) => v.id === id)
-        if (updated) upsertVehicle(updated).catch(console.error)
+        if (updated) upsertVehicle(updated, uid).catch(console.error)
       }
     },
 
     deleteVehicle: (id) => {
       set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) }))
-      if (get().user) removeVehicle(id).catch(console.error)
+      const uid = get().user?.id
+      if (uid) removeVehicle(id).catch(console.error)
     },
 
     // ── Contacts ────────────────────────────────────────────────────────────
