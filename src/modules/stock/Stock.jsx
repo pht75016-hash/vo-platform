@@ -1,0 +1,439 @@
+import { useState, useMemo, useRef } from 'react';
+import { P, STATUTS, EMPTY_FORM, EMPTY_FILTERS, DEFAULT_STEPS, MQ, CARBURANTS, BOITES, CATEGORIES, TVA_TYPES } from '../../utils/constants';
+import { fmtP, fmtK, fmtD, r2, daysColor, fmtDays, calcMargin } from '../../utils/formatters';
+import { useStore } from '../../store/useStore';
+import { resizeImage } from '../../utils/imageUtils';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import StepTracker from '../../components/StepTracker';
+import { MarginBadge, PhotoPlaceholder, FuelTag, TvaTag, DaysBadge } from '../../components/VehicleBadges';
+import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown } from '../../components/Icons';
+
+export default function Stock() {
+  const mob = useIsMobile();
+  const vehicles    = useStore(s => s.vehicles);
+  const addVehicle    = useStore(s => s.addVehicle);
+  const updateVehicle = useStore(s => s.updateVehicle);
+  const deleteVehicle = useStore(s => s.deleteVehicle);
+  const [viewMode, setViewMode] = useState('list');
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({...EMPTY_FORM});
+  const [search, setSearch] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [attempted, setAttempted] = useState(false);
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const [filters, setFilters] = useState({...EMPTY_FILTERS});
+  const [showFilters, setShowFilters] = useState(false);
+  const [showSteps, setShowSteps] = useState(true);
+  const [expandedSteps, setExpandedSteps] = useState(new Set());
+  const fileRef = useRef(null);
+
+  const toggleSort = (key) => { if(sortKey===key) setSortDir(d=>d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('asc'); } };
+  const toggleExpand = (id) => setExpandedSteps(prev => { const n = new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const toggleAllSteps = () => { if(showSteps){setExpandedSteps(new Set());}else{setExpandedSteps(new Set(vehicles.map(v=>v.id)));} setShowSteps(!showSteps); };
+
+  const updateVehicleSteps = (id, newSteps) => updateVehicle(id, { steps: newSteps });
+  const updateVehicleDocs  = (id, newDocs)  => updateVehicle(id, { documents: newDocs });
+
+  const isElectric = form.carburant==='Électrique' || form.carburant==='Hybride Rechargeable';
+  const modeles = form.marque ? (MQ[form.marque]||[]) : [];
+  const canSave = form.immatriculation.trim() && form.marque && form.modele;
+  const isDed = form.tva==='TVA déductible';
+
+  const updateField = (key, val) => {
+    setForm(prev => {
+      const n = {...prev, [key]:val};
+      if(key==='marque') n.modele='';
+      if(key==='prixAchatHT')  { n.prixAchatTTC  = val ? String(r2(Number(val)*1.2)) : ''; }
+      if(key==='prixAchatTTC') { n.prixAchatHT   = val ? String(r2(Number(val)/1.2)) : ''; }
+      if(key==='prixVenteHT')  { n.prixVenteTTC  = val ? String(r2(Number(val)*1.2)) : ''; }
+      if(key==='prixVenteTTC') { n.prixVenteHT   = val ? String(r2(Number(val)/1.2)) : ''; }
+      return n;
+    });
+  };
+
+  const updateFilter = (key, val) => setFilters(prev => { const n={...prev,[key]:val}; if(key==='marque') n.modele=''; return n; });
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    for(const [k,v] of Object.entries(filters)) {
+      if(k==='statuts') { if(v.length!==1||v[0]!=='stock') n++; }
+      else if(v!=='') n++;
+    }
+    return n;
+  }, [filters]);
+
+  const toggleStatutFilter = (k) => setFilters(prev => {
+    const cur = prev.statuts||[];
+    const next = cur.includes(k) ? cur.filter(s=>s!==k) : [...cur,k];
+    return {...prev, statuts:next};
+  });
+
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const b = await resizeImage(file);
+    setForm(prev=>({...prev, photo:b}));
+  };
+
+  const openAdd  = () => { setForm({...EMPTY_FORM,steps:JSON.parse(JSON.stringify(DEFAULT_STEPS))}); setEditId(null); setAttempted(false); setShowForm(true); };
+  const openEdit = (v) => { setForm({...v}); setEditId(v.id); setAttempted(false); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditId(null); setAttempted(false); };
+
+  const handleSave = () => {
+    setAttempted(true);
+    if(!canSave) return;
+    const entry = {...form, id:editId||String(Date.now()), kmAffiche:form.kilometrage?String(Number(form.kilometrage)+200):''};
+    if(!entry.steps) entry.steps = JSON.parse(JSON.stringify(DEFAULT_STEPS));
+    if(editId) { updateVehicle(editId, entry); } else { addVehicle(entry); }
+    closeForm();
+  };
+
+  const handleDelete = (id) => { deleteVehicle(id); setDeleteConfirm(null); };
+
+  const filtered = useMemo(() => {
+    let r = vehicles;
+    if(search.trim()){const q=search.toLowerCase();r=r.filter(v=>[v.immatriculation,v.numeroVO,v.marque,v.modele,v.carburant,v.vin,v.categorie].some(f=>f?.toLowerCase().includes(q)));}
+    const f = filters;
+    if(f.statuts&&f.statuts.length>0) r=r.filter(v=>f.statuts.includes(v.statut||'stock'));
+    if(f.marque)    r=r.filter(v=>v.marque===f.marque);
+    if(f.modele)    r=r.filter(v=>v.modele===f.modele);
+    if(f.carburant) r=r.filter(v=>v.carburant===f.carburant);
+    if(f.boite)     r=r.filter(v=>v.boite===f.boite);
+    if(f.categorie) r=r.filter(v=>v.categorie===f.categorie);
+    if(f.tva)       r=r.filter(v=>v.tva===f.tva);
+    if(f.kmMin) r=r.filter(v=>Number(v.kmAffiche||v.kilometrage||0)>=Number(f.kmMin));
+    if(f.kmMax) r=r.filter(v=>Number(v.kmAffiche||v.kilometrage||0)<=Number(f.kmMax));
+    if(f.prixMin) r=r.filter(v=>Number(v.prixVenteTTC||0)>=Number(f.prixMin));
+    if(f.prixMax) r=r.filter(v=>Number(v.prixVenteTTC||0)<=Number(f.prixMax));
+    if(f.puissanceMin) r=r.filter(v=>Number(v.puissanceFiscale||0)>=Number(f.puissanceMin));
+    if(f.puissanceMax) r=r.filter(v=>Number(v.puissanceFiscale||0)<=Number(f.puissanceMax));
+    if(f.dateMECMin)   r=r.filter(v=>v.dateMEC>=f.dateMECMin);
+    if(f.dateMECMax)   r=r.filter(v=>v.dateMEC<=f.dateMECMax);
+    if(sortKey){r=[...r].sort((a,b)=>{let va=a[sortKey]||'',vb=b[sortKey]||'';if(['kilometrage','kmAffiche','prixAchatHT','prixAchatTTC','prixVenteHT','prixVenteTTC','puissanceFiscale'].includes(sortKey)){va=Number(va)||0;vb=Number(vb)||0;return sortDir==='asc'?va-vb:vb-va;}va=String(va).toLowerCase();vb=String(vb).toLowerCase();return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);});}
+    return r;
+  }, [vehicles, search, sortKey, sortDir, filters]);
+
+  // Options dynamiques pour les filtres (depuis le stock réel)
+  const stockMarques    = useMemo(()=>[...new Set(vehicles.map(v=>v.marque).filter(Boolean))].sort(),[vehicles]);
+  const stockModeles    = useMemo(()=>{const base=filters.marque?vehicles.filter(v=>v.marque===filters.marque):vehicles;return[...new Set(base.map(v=>v.modele).filter(Boolean))].sort();},[vehicles,filters.marque]);
+  const stockCarburants = useMemo(()=>[...new Set(vehicles.map(v=>v.carburant).filter(Boolean))].sort(),[vehicles]);
+  const stockBoites     = useMemo(()=>[...new Set(vehicles.map(v=>v.boite).filter(Boolean))].sort(),[vehicles]);
+  const stockCategories = useMemo(()=>[...new Set(vehicles.map(v=>v.categorie).filter(Boolean))].sort(),[vehicles]);
+
+  // Styles réutilisables
+  const inp = (field, req) => ({padding:mob?'10px 12px':'8px 11px',borderRadius:7,fontSize:mob?16:13,color:P.text,outline:'none',background:'#FAFBFC',border:(attempted&&req&&!form[field])?`2px solid ${P.red}`:`1px solid ${P.border}`,width:'100%',boxSizing:'border-box'});
+  const sel = (field, req) => ({...inp(field,req),appearance:'none',paddingRight:30,backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 10px center'});
+  const lbl  = {fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.4px',color:P.textSoft};
+  const grp  = {display:'flex',flexDirection:'column',gap:4};
+  const sec_ = {gridColumn:'1/-1',fontSize:13,fontWeight:700,color:P.accent,borderBottom:`1px solid ${P.border}`,paddingBottom:6,marginTop:6};
+  const ibtn = {background:'none',border:'none',cursor:'pointer',padding:mob?8:4,borderRadius:6,display:'flex',alignItems:'center'};
+  const hint = {fontSize:11,color:P.textSoft,marginTop:1};
+  const fSel = {padding:mob?'10px 12px':'6px 9px',borderRadius:6,fontSize:mob?16:12,color:P.text,outline:'none',background:'#FAFBFC',border:`1px solid ${P.border}`,width:'100%',boxSizing:'border-box',appearance:'none',paddingRight:26,backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'};
+  const fInp = {padding:mob?'10px 12px':'6px 9px',borderRadius:6,fontSize:mob?16:12,color:P.text,outline:'none',background:'#FAFBFC',border:`1px solid ${P.border}`,width:'100%',boxSizing:'border-box'};
+  const fLbl = {fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.3px',color:P.textSoft,marginBottom:3};
+  const fGrp = {marginBottom:14};
+
+  const getDP = (v) => v.tva==='TVA déductible' ? {achat:fmtP(v.prixAchatHT),vente:fmtP(v.prixVenteTTC)} : {achat:fmtP(v.prixAchatTTC),vente:fmtP(v.prixVenteTTC)};
+
+  const filterContent = () => (<>
+    <div style={{...fGrp,paddingBottom:12,marginBottom:14,borderBottom:`1px solid ${P.border}`}}>
+      <div style={{...fLbl,marginBottom:6}}>Vue</div>
+      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+        {STATUTS.map(s=>{
+          const checked=(filters.statuts||[]).includes(s.k);
+          const count=vehicles.filter(v=>(v.statut||'stock')===s.k).length;
+          return (
+            <label key={s.k} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:6,cursor:'pointer',background:checked?s.bg:'transparent',border:`1px solid ${checked?s.color+'40':'transparent'}`,transition:'all 0.15s'}}>
+              <input type="checkbox" checked={checked} onChange={()=>toggleStatutFilter(s.k)} style={{accentColor:s.color,width:15,height:15,flexShrink:0}}/>
+              <span style={{fontSize:12,fontWeight:600,color:checked?s.color:P.text,flex:1}}>{s.l}</span>
+              <span style={{fontSize:10,fontWeight:700,color:checked?s.color:P.textSoft,background:checked?'#ffffff80':P.bg,padding:'1px 7px',borderRadius:10}}>{count}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+    <div style={fGrp}><div style={fLbl}>Marque</div><select style={fSel} value={filters.marque} onChange={e=>updateFilter('marque',e.target.value)}><option value="">Toutes</option>{stockMarques.map(m=><option key={m}>{m}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>Modèle</div><select style={fSel} value={filters.modele} onChange={e=>updateFilter('modele',e.target.value)}><option value="">Tous</option>{stockModeles.map(m=><option key={m}>{m}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>Carburant</div><select style={fSel} value={filters.carburant} onChange={e=>updateFilter('carburant',e.target.value)}><option value="">Tous</option>{stockCarburants.map(c=><option key={c}>{c}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>Boîte</div><select style={fSel} value={filters.boite} onChange={e=>updateFilter('boite',e.target.value)}><option value="">Toutes</option>{stockBoites.map(b=><option key={b}>{b}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>Catégorie</div><select style={fSel} value={filters.categorie} onChange={e=>updateFilter('categorie',e.target.value)}><option value="">Toutes</option>{stockCategories.map(c=><option key={c}>{c}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>TVA</div><select style={fSel} value={filters.tva} onChange={e=>updateFilter('tva',e.target.value)}><option value="">Toutes</option>{TVA_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+    <div style={fGrp}><div style={fLbl}>Km</div><div style={{display:'flex',gap:6,alignItems:'center'}}><input style={fInp} type="number" placeholder="Min" value={filters.kmMin} onChange={e=>updateFilter('kmMin',e.target.value)}/><span style={{color:P.textSoft,fontSize:11}}>à</span><input style={fInp} type="number" placeholder="Max" value={filters.kmMax} onChange={e=>updateFilter('kmMax',e.target.value)}/></div></div>
+    <div style={fGrp}><div style={fLbl}>Prix vente</div><div style={{display:'flex',gap:6,alignItems:'center'}}><input style={fInp} type="number" placeholder="Min" value={filters.prixMin} onChange={e=>updateFilter('prixMin',e.target.value)}/><span style={{color:P.textSoft,fontSize:11}}>à</span><input style={fInp} type="number" placeholder="Max" value={filters.prixMax} onChange={e=>updateFilter('prixMax',e.target.value)}/></div></div>
+    <div style={fGrp}><div style={fLbl}>CV</div><div style={{display:'flex',gap:6,alignItems:'center'}}><input style={fInp} type="number" placeholder="Min" value={filters.puissanceMin} onChange={e=>updateFilter('puissanceMin',e.target.value)}/><span style={{color:P.textSoft,fontSize:11}}>à</span><input style={fInp} type="number" placeholder="Max" value={filters.puissanceMax} onChange={e=>updateFilter('puissanceMax',e.target.value)}/></div></div>
+    <div style={fGrp}><div style={fLbl}>MEC</div><div style={{display:'flex',flexDirection:'column',gap:4}}><input style={fInp} type="date" value={filters.dateMECMin} onChange={e=>updateFilter('dateMECMin',e.target.value)}/><input style={fInp} type="date" value={filters.dateMECMax} onChange={e=>updateFilter('dateMECMax',e.target.value)}/></div></div>
+  </>);
+
+  const columns = [{label:'',key:null},{label:'Immat.',key:'immatriculation'},{label:'Marque',key:'marque'},{label:'Modèle',key:'modele'},{label:'Carburant',key:'carburant'},{label:'Km',key:'kmAffiche'},{label:'Jours',key:'dateAchat'},{label:'Achat',key:'prixAchatTTC'},{label:'Vente',key:'prixVenteTTC'},{label:'Marge',key:null},{label:'TVA',key:'tva'},{label:'',key:null}];
+
+  return (
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",color:P.text}}>
+      {/* TOOLBAR */}
+      <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:mob?14:20}}>
+        <span style={{background:P.accentSoft,color:P.accent,fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20,marginRight:4}}>{filtered.length}/{vehicles.length}</span>
+          <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',gap:8,flex:mob?1:undefined,minWidth:mob?0:180}}>
+            <IconSearch/>
+            <input style={{border:'none',outline:'none',fontSize:mob?16:13,background:'transparent',flex:1,color:P.text,minWidth:0}} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          </div>
+          <button onClick={()=>setShowFilters(f=>!f)} style={{display:'flex',alignItems:'center',gap:5,background:showFilters&&!mob?P.accentSoft:P.card,color:showFilters&&!mob?P.accent:P.textSoft,border:`1px solid ${showFilters&&!mob?P.accent:P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            <IconFilter/>{mob?'':'Filtres'}{activeFilterCount>0&&<span style={{background:P.accent,color:'#fff',fontSize:10,padding:'1px 6px',borderRadius:10,fontWeight:700}}>{activeFilterCount}</span>}
+          </button>
+          <button onClick={toggleAllSteps} style={{display:'flex',alignItems:'center',gap:5,background:showSteps?P.accentSoft:P.card,color:showSteps?P.accent:P.textSoft,border:`1px solid ${showSteps?P.accent:P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            {mob?'📋':'📋 Étapes'}
+          </button>
+          {!mob&&<div style={{display:'flex',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,overflow:'hidden'}}>
+            <button style={{padding:'7px 10px',background:viewMode==='list'?P.accent:'transparent',color:viewMode==='list'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('list')}><IconList/></button>
+            <button style={{padding:'7px 10px',background:viewMode==='grid'?P.accent:'transparent',color:viewMode==='grid'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('grid')}><IconGrid/></button>
+          </div>}
+          <button style={{display:'flex',alignItems:'center',gap:6,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:mob?'10px 14px':'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={openAdd}>
+            <IconPlus/>{mob?'':'Ajouter'}
+          </button>
+      </div>
+
+      {/* CONTENU */}
+      {filtered.length===0&&vehicles.length===0 ? (
+        <div style={{textAlign:'center',padding:'50px 20px',color:P.textSoft}}>
+          <div style={{fontSize:36,marginBottom:12,opacity:0.3,display:'flex',justifyContent:'center'}}><IconCar/></div>
+          <div style={{fontSize:15,fontWeight:600}}>Aucun véhicule</div>
+          <div style={{fontSize:13,marginTop:4}}>Cliquez sur « Ajouter » pour commencer</div>
+        </div>
+      ) : (
+        <div style={{display:'flex',gap:16,alignItems:'flex-start'}}>
+          {/* SIDEBAR FILTRES DESKTOP */}
+          {showFilters&&!mob&&(
+            <div style={{width:220,minWidth:220,background:P.card,borderRadius:12,border:`1px solid ${P.border}`,padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',position:'sticky',top:20,maxHeight:'calc(100vh - 100px)',overflowY:'auto'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+                <span style={{fontSize:13,fontWeight:700,color:P.accent}}>Filtres{activeFilterCount>0&&<span style={{background:P.accent,color:'#fff',fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:10,marginLeft:6}}>{activeFilterCount}</span>}</span>
+                {activeFilterCount>0&&<button onClick={()=>setFilters({...EMPTY_FILTERS})} style={{background:'none',border:'none',cursor:'pointer',color:P.red,fontSize:11,fontWeight:600,display:'flex',alignItems:'center'}}><IconReset/></button>}
+              </div>
+              {filterContent()}
+            </div>
+          )}
+          <div style={{flex:1,minWidth:0}}>
+            {filtered.length===0 ? (
+              <div style={{textAlign:'center',padding:'40px 20px',color:P.textSoft,background:P.card,borderRadius:12}}>
+                <div style={{fontSize:15,fontWeight:600}}>Aucun résultat</div>
+                {activeFilterCount>0&&<button onClick={()=>setFilters({...EMPTY_FILTERS})} style={{marginTop:12,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Réinitialiser</button>}
+              </div>
+            ) : mob||viewMode==='grid' ? (
+              /* VUE GRILLE */
+              <div style={{display:'grid',gridTemplateColumns:mob?'1fr':'repeat(auto-fill,minmax(320px,1fr))',gap:mob?10:14}}>
+                {filtered.map(v=>{
+                  const dp=getDP(v); const isExp=expandedSteps.has(v.id);
+                  return (
+                    <div key={v.id} style={{background:P.card,borderRadius:12,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',border:`1px solid ${P.border}`}}>
+                      {v.photo
+                        ? <div style={{width:'100%',height:160,overflow:'hidden',background:'#f0f0f0'}}><img src={v.photo} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
+                        : <div style={{width:'100%',height:70,background:P.accentSoft,display:'flex',alignItems:'center',justifyContent:'center',opacity:0.4}}><IconCar/></div>
+                      }
+                      <div style={{padding:14}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:700,color:P.accent}}>{v.marque} {v.modele}</div>
+                            <div style={{fontSize:12,color:P.textSoft,marginTop:1}}>{v.immatriculation}</div>
+                          </div>
+                          <div style={{display:'flex',gap:4}}>
+                            <button style={{...ibtn,background:P.accentSoft,borderRadius:8}} onClick={()=>openEdit(v)}><span style={{color:P.accent}}><IconPencil/></span></button>
+                            <button style={{...ibtn,background:P.redSoft,borderRadius:8}} onClick={()=>setDeleteConfirm(v.id)}><span style={{color:P.red}}><IconTrash/></span></button>
+                          </div>
+                        </div>
+                        <div style={{display:'flex',gap:5,marginBottom:8,flexWrap:'wrap'}}>
+                          <FuelTag carburant={v.carburant}/>
+                          <TvaTag tva={v.tva}/>
+                          <DaysBadge dateAchat={v.dateAchat}/>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div><div style={{fontSize:10,color:P.textSoft}}>Vente</div><div style={{fontSize:18,fontWeight:700,color:P.accent}}>{dp.vente}</div></div>
+                          <MarginBadge v={v} compact/>
+                        </div>
+                      </div>
+                      {showSteps&&(
+                        <div>
+                          <button onClick={()=>toggleExpand(v.id)} style={{width:'100%',padding:'8px 14px',background:'#FAFBFC',border:'none',borderTop:`1px solid ${P.border}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12,fontWeight:600,color:P.textSoft}}>
+                            <span>Étapes</span><IconChevDown open={isExp}/>
+                          </button>
+                          {isExp&&<StepTracker vehicle={v} onUpdate={ns=>updateVehicleSteps(v.id,ns)} onUpdateDocs={d=>updateVehicleDocs(v.id,d)} mob={mob}/>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* VUE LISTE */
+              <div style={{background:P.card,borderRadius:12,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+                <table style={{width:'100%',borderCollapse:'separate',borderSpacing:0}}>
+                  <thead>
+                    <tr>
+                      {columns.map((col,i)=>(
+                        <th key={i} onClick={col.key?()=>toggleSort(col.key):undefined} style={{textAlign:'left',padding:'10px 10px',fontSize:10.5,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',color:sortKey===col.key?P.accent:P.textSoft,borderBottom:`2px solid ${P.border}`,background:'#FAFBFC',whiteSpace:'nowrap',cursor:col.key?'pointer':'default',userSelect:'none'}}>
+                          <span style={{display:'inline-flex',alignItems:'center',gap:3}}>
+                            {col.label}
+                            {col.key&&<IconSort active={sortKey===col.key} dir={sortDir}/>}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(v=>{
+                      const td={padding:'8px 10px',fontSize:13,borderBottom:`1px solid ${P.border}`,whiteSpace:'nowrap',verticalAlign:'middle'};
+                      const dp=getDP(v); const isExp=showSteps&&expandedSteps.has(v.id);
+                      return [
+                        <tr key={v.id} style={{cursor:'pointer'}} onClick={()=>showSteps&&toggleExpand(v.id)} onMouseEnter={e=>e.currentTarget.style.background='#F9FAFB'} onMouseLeave={e=>e.currentTarget.style.background=''}>
+                          <td style={{...td,padding:'6px 10px'}}>{v.photo?<img src={v.photo} alt="" style={{width:40,height:40,borderRadius:6,objectFit:'cover',display:'block'}}/>:<PhotoPlaceholder size={40}/>}</td>
+                          <td style={{...td,fontWeight:700,color:P.accent}}>{v.immatriculation||'—'}</td>
+                          <td style={{...td,fontWeight:600}}>{v.marque}</td>
+                          <td style={td}>{v.modele}</td>
+                          <td style={td}><FuelTag carburant={v.carburant}/></td>
+                          <td style={td}>{fmtK(v.kmAffiche||v.kilometrage)}</td>
+                          <td style={td}><DaysBadge dateAchat={v.dateAchat}/></td>
+                          <td style={td}>{dp.achat}</td>
+                          <td style={{...td,fontWeight:700}}>{dp.vente}</td>
+                          <td style={td}><MarginBadge v={v} compact/></td>
+                          <td style={td}><TvaTag tva={v.tva}/></td>
+                          <td style={{...td,whiteSpace:'nowrap'}} onClick={e=>e.stopPropagation()}>
+                            <button style={ibtn} onClick={()=>openEdit(v)} onMouseEnter={e=>e.currentTarget.style.background=P.accentSoft} onMouseLeave={e=>e.currentTarget.style.background=''}><span style={{color:P.accent}}><IconPencil/></span></button>
+                            <button style={{...ibtn,marginLeft:2}} onClick={()=>setDeleteConfirm(v.id)} onMouseEnter={e=>e.currentTarget.style.background=P.redSoft} onMouseLeave={e=>e.currentTarget.style.background=''}><span style={{color:P.red}}><IconTrash/></span></button>
+                          </td>
+                        </tr>,
+                        isExp&&(
+                          <tr key={v.id+'_steps'}><td colSpan={columns.length} style={{padding:0}}>
+                            <StepTracker vehicle={v} onUpdate={ns=>updateVehicleSteps(v.id,ns)} onUpdateDocs={d=>updateVehicleDocs(v.id,d)} mob={mob}/>
+                          </td></tr>
+                        )
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* FILTRES MOBILE */}
+      {showFilters&&mob&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:1000,display:'flex',justifyContent:'flex-end'}} onClick={e=>{if(e.target===e.currentTarget)setShowFilters(false);}}>
+          <div style={{width:'85%',maxWidth:360,background:P.card,height:'100%',overflowY:'auto',padding:'20px 18px'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <span style={{fontSize:16,fontWeight:700,color:P.accent}}>Filtres</span>
+              <button onClick={()=>setShowFilters(false)} style={{background:'none',border:'none',cursor:'pointer',color:P.textSoft,padding:8}}><IconClose/></button>
+            </div>
+            {activeFilterCount>0&&<button onClick={()=>setFilters({...EMPTY_FILTERS})} style={{background:P.redSoft,color:P.red,border:'none',borderRadius:8,padding:10,fontSize:13,fontWeight:600,cursor:'pointer',width:'100%',marginBottom:16}}>Réinitialiser</button>}
+            {filterContent()}
+            <button onClick={()=>setShowFilters(false)} style={{background:P.accent,color:'#fff',border:'none',borderRadius:10,padding:14,fontSize:14,fontWeight:600,cursor:'pointer',width:'100%',marginTop:20}}>Voir {filtered.length} résultat{filtered.length>1?'s':''}</button>
+          </div>
+        </div>
+      )}
+
+      {/* FORMULAIRE */}
+      {showForm&&(
+        <div style={{position:'fixed',inset:0,background:mob?'transparent':'rgba(0,0,0,0.35)',zIndex:1000,display:'flex',alignItems:mob?'stretch':'flex-start',justifyContent:'center',padding:mob?0:'24px 16px',overflowY:mob?'hidden':'auto'}}>
+          <div style={{background:P.card,borderRadius:mob?0:16,width:'100%',maxWidth:mob?'100%':680,height:mob?'100%':'auto',boxShadow:mob?'none':'0 20px 60px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:mob?'14px 16px':'16px 24px',borderBottom:`1px solid ${P.border}`,flexShrink:0}}>
+              <span style={{fontSize:mob?16:17,fontWeight:700,color:P.accent}}>{editId?'Modifier':'Ajouter un véhicule'}</span>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:P.textSoft,padding:8}} onClick={closeForm}><IconClose/></button>
+            </div>
+            {attempted&&!canSave&&(
+              <div style={{margin:mob?'12px 16px 0':'12px 24px 0',padding:'10px 14px',background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,fontSize:13,color:P.red,fontWeight:500,flexShrink:0}}>
+                Remplissez : Immatriculation, Marque et Modèle
+              </div>
+            )}
+            <div style={{padding:mob?'16px':'20px 24px',flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+              <div style={{display:'grid',gridTemplateColumns:mob?'1fr':'1fr 1fr',gap:mob?'12px':'14px 18px'}}>
+                <div style={sec_}>Photo</div>
+                <div style={{gridColumn:'1/-1',display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+                  {form.photo
+                    ? <div style={{position:'relative'}}><img src={form.photo} alt="" style={{width:120,height:90,borderRadius:10,objectFit:'cover',border:`2px solid ${P.border}`}}/><button onClick={()=>setForm(p=>({...p,photo:''}))} style={{position:'absolute',top:-8,right:-8,width:24,height:24,borderRadius:12,background:P.red,color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>×</button></div>
+                    : <div style={{width:120,height:90,borderRadius:10,border:`2px dashed ${P.border}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',background:'#FAFBFC',gap:4}} onClick={()=>fileRef.current?.click()}><IconCamera/><span style={{fontSize:11,color:P.textSoft}}>Photo</span></div>
+                  }
+                  <button onClick={()=>fileRef.current?.click()} style={{background:P.accentSoft,color:P.accent,border:'none',borderRadius:8,padding:'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}}>{form.photo?'Changer':'Parcourir'}</button>
+                  <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto}/>
+                </div>
+
+                <div style={sec_}>Identification</div>
+                <div style={{...grp,gridColumn:'1/-1'}}>
+                  <label style={lbl}>Statut</label>
+                  <div style={{display:'flex',gap:6}}>
+                    {STATUTS.map(s=>(
+                      <button key={s.k} onClick={()=>updateField('statut',s.k)} style={{flex:1,padding:mob?'10px':'8px 10px',borderRadius:8,border:`2px solid ${form.statut===s.k?s.color:P.border}`,background:form.statut===s.k?s.bg:P.card,color:form.statut===s.k?s.color:P.textSoft,fontSize:mob?13:12,fontWeight:700,cursor:'pointer',transition:'all 0.15s',fontFamily:'inherit'}}>
+                        {s.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={grp}><label style={lbl}>Immatriculation *</label><input style={inp('immatriculation',true)} value={form.immatriculation} onChange={e=>updateField('immatriculation',e.target.value.toUpperCase())} placeholder="AB-123-CD"/>{attempted&&!form.immatriculation.trim()&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>
+                <div style={grp}><label style={lbl}>N° VO</label><input style={inp('numeroVO',false)} value={form.numeroVO} onChange={e=>updateField('numeroVO',e.target.value)} placeholder="VO-2024-001"/></div>
+                <div style={grp}><label style={lbl}>VIN</label><input style={{...inp('vin',false),fontFamily:'monospace',letterSpacing:1}} value={form.vin} onChange={e=>updateField('vin',e.target.value.toUpperCase())} maxLength={17} placeholder="17 car."/></div>
+                <div style={grp}><label style={lbl}>Date achat (Cerfa)</label><input style={inp('dateAchat',false)} type="date" value={form.dateAchat} onChange={e=>updateField('dateAchat',e.target.value)}/></div>
+                <div style={grp}><label style={lbl}>Date MEC</label><input style={inp('dateMEC',false)} type="date" value={form.dateMEC} onChange={e=>updateField('dateMEC',e.target.value)}/></div>
+
+                <div style={sec_}>Véhicule</div>
+                <div style={grp}><label style={lbl}>Marque *</label><select style={sel('marque',true)} value={form.marque} onChange={e=>updateField('marque',e.target.value)}><option value="">Sélectionner</option>{Object.keys(MQ).sort().map(m=><option key={m}>{m}</option>)}</select>{attempted&&!form.marque&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>
+                <div style={grp}><label style={lbl}>Modèle *</label><select style={sel('modele',true)} value={form.modele} onChange={e=>updateField('modele',e.target.value)}><option value="">{form.marque?'Sélectionner':'Marque d\'abord'}</option>{modeles.map(m=><option key={m}>{m}</option>)}</select>{attempted&&!form.modele&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>
+                <div style={grp}><label style={lbl}>Carburant</label><select style={sel('carburant',false)} value={form.carburant} onChange={e=>updateField('carburant',e.target.value)}><option value="">Sélectionner</option>{CARBURANTS.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div style={grp}><label style={lbl}>Boîte</label><select style={sel('boite',false)} value={form.boite} onChange={e=>updateField('boite',e.target.value)}><option value="">Sélectionner</option>{BOITES.map(b=><option key={b}>{b}</option>)}</select></div>
+                <div style={grp}><label style={lbl}>Catégorie</label><select style={sel('categorie',false)} value={form.categorie} onChange={e=>updateField('categorie',e.target.value)}><option value="">Sélectionner</option>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div style={grp}><label style={lbl}>Places</label><select style={sel('nbPlaces',false)} value={form.nbPlaces} onChange={e=>updateField('nbPlaces',e.target.value)}>{[2,3,4,5,6,7,8,9].map(n=><option key={n} value={String(n)}>{n}</option>)}</select></div>
+
+                {isElectric&&(<>
+                  <div style={sec_}>⚡ Électrique</div>
+                  <div style={grp}><label style={lbl}>Batterie (kWh utiles)</label><input style={inp('capaciteBatterie',false)} type="number" value={form.capaciteBatterie} onChange={e=>updateField('capaciteBatterie',e.target.value)} placeholder="77"/></div>
+                  <div style={grp}><label style={lbl}>Charge AC (kW)</label><input style={inp('puissanceAC',false)} type="number" value={form.puissanceAC} onChange={e=>updateField('puissanceAC',e.target.value)} placeholder="11"/></div>
+                  <div style={{...grp,gridColumn:'1/-1'}}><div style={{display:'flex',gap:20,marginTop:4}}><label style={{display:'flex',alignItems:'center',gap:8,fontSize:14,cursor:'pointer'}}><input type="checkbox" style={{accentColor:P.accent,width:18,height:18}} checked={form.chargeurAC} onChange={e=>updateField('chargeurAC',e.target.checked)}/> AC</label><label style={{display:'flex',alignItems:'center',gap:8,fontSize:14,cursor:'pointer'}}><input type="checkbox" style={{accentColor:P.accent,width:18,height:18}} checked={form.chargeurDC} onChange={e=>updateField('chargeurDC',e.target.checked)}/> DC</label></div></div>
+                  {form.chargeurDC&&(<><div style={grp}><label style={lbl}>Standard DC</label><select style={sel('typeDC',false)} value={form.typeDC} onChange={e=>updateField('typeDC',e.target.value)}><option value="COMBO CCS">Combo CCS</option><option value="CHAdeMO">CHAdeMO</option></select></div><div style={grp}><label style={lbl}>Charge DC (kW)</label><input style={inp('puissanceDC',false)} type="number" value={form.puissanceDC} onChange={e=>updateField('puissanceDC',e.target.value)} placeholder="135"/></div></>)}
+                </>)}
+
+                <div style={sec_}>Kilométrage</div>
+                <div style={grp}><label style={lbl}>Km réel</label><input style={inp('kilometrage',false)} type="number" value={form.kilometrage} onChange={e=>updateField('kilometrage',e.target.value)} placeholder="45000"/>{form.kilometrage&&<span style={{fontSize:11,color:P.green,marginTop:2}}>Affiché : {(Number(form.kilometrage)+200).toLocaleString('fr-FR')} km</span>}</div>
+                <div style={grp}><label style={lbl}>CV fiscaux</label><input style={inp('puissanceFiscale',false)} type="number" value={form.puissanceFiscale} onChange={e=>updateField('puissanceFiscale',e.target.value)} placeholder="P.6"/></div>
+
+                <div style={sec_}>Tarification</div>
+                <div style={{...grp,gridColumn:'1/-1'}}><label style={lbl}>Régime TVA</label><div style={{display:'flex',gap:8}}>{TVA_TYPES.map(t=>(<button key={t} onClick={()=>updateField('tva',t)} style={{flex:1,padding:mob?'12px':'9px 14px',borderRadius:8,border:`2px solid ${form.tva===t?P.accent:P.border}`,background:form.tva===t?P.accentSoft:P.card,color:form.tva===t?P.accent:P.textSoft,fontSize:mob?14:13,fontWeight:600,cursor:'pointer'}}>{t.replace('TVA ','')}</button>))}</div></div>
+                {isDed ? (<>
+                  <div style={grp}><label style={lbl}>Achat HT (€)</label><input style={inp('prixAchatHT',false)} type="number" value={form.prixAchatHT} onChange={e=>updateField('prixAchatHT',e.target.value)} placeholder="HT"/>{form.prixAchatHT&&<span style={hint}>TTC : {fmtP(form.prixAchatTTC)}</span>}</div>
+                  <div style={grp}><label style={lbl}>Achat TTC (€)</label><input style={inp('prixAchatTTC',false)} type="number" value={form.prixAchatTTC} onChange={e=>updateField('prixAchatTTC',e.target.value)} placeholder="TTC"/></div>
+                  <div style={grp}><label style={lbl}>Vente HT (€)</label><input style={inp('prixVenteHT',false)} type="number" value={form.prixVenteHT} onChange={e=>updateField('prixVenteHT',e.target.value)} placeholder="HT"/>{form.prixVenteHT&&<span style={hint}>TTC : {fmtP(form.prixVenteTTC)}</span>}</div>
+                  <div style={grp}><label style={lbl}>Vente TTC (€)</label><input style={inp('prixVenteTTC',false)} type="number" value={form.prixVenteTTC} onChange={e=>updateField('prixVenteTTC',e.target.value)} placeholder="TTC"/></div>
+                </>) : (<>
+                  <div style={grp}><label style={lbl}>Prix d'achat (€)</label><input style={inp('prixAchatTTC',false)} type="number" value={form.prixAchatTTC} onChange={e=>updateField('prixAchatTTC',e.target.value)} placeholder="Achat"/></div>
+                  <div style={grp}><label style={lbl}>Prix de vente (€)</label><input style={inp('prixVenteTTC',false)} type="number" value={form.prixVenteTTC} onChange={e=>updateField('prixVenteTTC',e.target.value)} placeholder="Vente"/></div>
+                </>)}
+                {(form.prixAchatTTC||form.prixAchatHT)&&form.prixVenteTTC&&(<div style={{gridColumn:'1/-1'}}><MarginBadge v={form}/></div>)}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:10,padding:mob?'16px':'16px 24px',borderTop:`1px solid ${P.border}`,flexShrink:0}}>
+              {!mob&&<button onClick={closeForm} style={{background:P.bg,color:P.text,border:`1px solid ${P.border}`,borderRadius:8,padding:'9px 22px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Annuler</button>}
+              <button onClick={handleSave} style={{background:P.accent,color:'#fff',border:'none',borderRadius:mob?10:8,padding:mob?'14px':'9px 22px',fontSize:mob?15:13,fontWeight:600,cursor:'pointer',flex:mob?1:undefined}}>
+                {editId?'Enregistrer':'Ajouter au stock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION SUPPRESSION */}
+      {deleteConfirm&&(()=>{
+        const v = vehicles.find(x=>x.id===deleteConfirm);
+        if(!v) return null;
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:1001,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setDeleteConfirm(null)}>
+            <div style={{background:P.card,borderRadius:16,maxWidth:360,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.15)'}} onClick={e=>e.stopPropagation()}>
+              <div style={{padding:24,textAlign:'center'}}>
+                <div style={{fontSize:17,fontWeight:700,color:P.red,marginBottom:8}}>Supprimer ?</div>
+                <div style={{fontSize:13,color:P.textSoft,marginBottom:20}}>{v.marque} {v.modele} — {v.immatriculation}</div>
+                <div style={{display:'flex',gap:10}}>
+                  <button style={{background:P.bg,color:P.text,border:`1px solid ${P.border}`,borderRadius:8,padding:'10px',fontSize:13,fontWeight:600,cursor:'pointer',flex:1}} onClick={()=>setDeleteConfirm(null)}>Annuler</button>
+                  <button style={{background:P.red,color:'#fff',border:'none',borderRadius:8,padding:'10px',fontSize:13,fontWeight:600,cursor:'pointer',flex:1}} onClick={()=>handleDelete(deleteConfirm)}>Supprimer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
