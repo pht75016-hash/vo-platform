@@ -63,6 +63,7 @@ export function Topbar({ actions }) {
   const navigate = useNavigate()
   const theme = useStore((s) => s.theme)
   const setTheme = useStore((s) => s.setTheme)
+  const syncError = useStore((s) => s.syncError)
 
   const title = getTitle(location.pathname)
   const showBack = isSubRoute(location.pathname)
@@ -96,6 +97,21 @@ export function Topbar({ actions }) {
       }}>
         {title}
       </span>
+
+      {/* Indicateur d'erreur de sync Supabase */}
+      {syncError && (
+        <div title={syncError} style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '3px 8px', borderRadius: 6,
+          background: '#FEE2E2', color: '#DC2626', fontSize: 11, fontWeight: 500,
+          maxWidth: 180, overflow: 'hidden',
+        }}>
+          <span style={{ flexShrink: 0, fontSize: 13 }}>⚠</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {syncError}
+          </span>
+        </div>
+      )}
 
       {/* Slot d'actions contextuelles */}
       {actions && <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{actions}</div>}

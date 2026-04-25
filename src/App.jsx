@@ -11,7 +11,7 @@ import { Location } from './modules/location/Location'
 import { Login } from './modules/auth/Login'
 import { supabase } from './utils/supabase'
 import { useStore } from './store/useStore'
-import { fetchVehicles } from './utils/storage'
+import { fetchVehicles, upsertVehicle } from './utils/storage'
 
 export default function App() {
   const user = useStore((s) => s.user)
@@ -19,42 +19,48 @@ export default function App() {
   const setVehicles = useStore((s) => s.setVehicles)
   const realtimeChannel = useRef(null)
 
-  // Charge les véhicules depuis Supabase (source de vérité)
-  async function loadFromSupabase() {
+  async function loadFromSupabase(userId) {
     try {
-      const vehicles = await fetchVehicles()
-      setVehicles(vehicles) // Toujours écraser le cache local avec Supabase
+      const remote = await fetchVehicles()
+
+      if (remote.length > 0) {
+        // Supabase a des données → source de vérité
+        setVehicles(remote)
+      } else {
+        // Supabase vide → on remonte les données locales si elles existent
+        const local = useStore.getState().vehicles
+        if (local.length > 0 && userId) {
+          await Promise.all(local.map(v => upsertVehicle(v, userId)))
+          // Pas besoin de setVehicles : local est déjà correct
+        }
+      }
     } catch (err) {
-      // Supabase injoignable → le cache localStorage (Zustand persist) reste actif
       console.warn('Supabase unavailable, using local cache:', err.message)
     }
   }
 
-  // Abonnement Realtime : toute modification sur la table vehicles
-  // déclenche un rechargement sur tous les appareils connectés
   function subscribeRealtime() {
     if (realtimeChannel.current) supabase.removeChannel(realtimeChannel.current)
     realtimeChannel.current = supabase
       .channel('vehicles-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => {
-        loadFromSupabase()
+        const uid = useStore.getState().user?.id
+        if (uid) loadFromSupabase(uid)
       })
       .subscribe()
   }
 
   useEffect(() => {
-    // Vérifie la session existante au démarrage
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setUser(u)
-      if (u) { loadFromSupabase(); subscribeRealtime() }
+      if (u) { loadFromSupabase(u.id); subscribeRealtime() }
     })
 
-    // Écoute les changements d'état d'auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUser(u)
-      if (u) { loadFromSupabase(); subscribeRealtime() }
+      if (u) { loadFromSupabase(u.id); subscribeRealtime() }
       if (!u && realtimeChannel.current) {
         supabase.removeChannel(realtimeChannel.current)
         realtimeChannel.current = null

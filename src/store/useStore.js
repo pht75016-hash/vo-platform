@@ -9,6 +9,10 @@ export const useStore = create(persist(
     user: undefined,
     setUser: (user) => set({ user }),
 
+    // ── Sync status ─────────────────────────────────────────────────────────
+    syncError: null,   // null = ok | string = message d'erreur
+    setSyncError: (msg) => set({ syncError: msg }),
+
     // ── Véhicules ───────────────────────────────────────────────────────────
     vehicles: [],
     setVehicles: (vehicles) => set({ vehicles }),
@@ -16,7 +20,9 @@ export const useStore = create(persist(
     addVehicle: (v) => {
       set((s) => ({ vehicles: [v, ...s.vehicles] }))
       const uid = get().user?.id
-      if (uid) upsertVehicle(v, uid).catch(console.error)
+      if (uid) upsertVehicle(v, uid)
+        .then(() => set({ syncError: null }))
+        .catch((err) => set({ syncError: err.message }))
     },
 
     updateVehicle: (id, data) => {
@@ -26,14 +32,18 @@ export const useStore = create(persist(
       const uid = get().user?.id
       if (uid) {
         const updated = get().vehicles.find((v) => v.id === id)
-        if (updated) upsertVehicle(updated, uid).catch(console.error)
+        if (updated) upsertVehicle(updated, uid)
+          .then(() => set({ syncError: null }))
+          .catch((err) => set({ syncError: err.message }))
       }
     },
 
     deleteVehicle: (id) => {
       set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) }))
       const uid = get().user?.id
-      if (uid) removeVehicle(id).catch(console.error)
+      if (uid) removeVehicle(id)
+        .then(() => set({ syncError: null }))
+        .catch((err) => set({ syncError: err.message }))
     },
 
     // ── Contacts ────────────────────────────────────────────────────────────
