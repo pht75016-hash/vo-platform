@@ -1,6 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { useTheme } from '../../utils/theme'
+import { useIsMobile } from '../../hooks/useIsMobile'
+import { supabase } from '../../utils/supabase'
 
 const ROUTE_TITLES = {
   '/':         'Accueil',
@@ -43,8 +45,20 @@ function IconMoon() {
   )
 }
 
+function IconLogout() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3" />
+      <path d="M10.5 11L14 8l-3.5-3" />
+      <path d="M14 8H6" />
+    </svg>
+  )
+}
+
 export function Topbar({ actions }) {
   const t = useTheme()
+  const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
   const theme = useStore((s) => s.theme)
@@ -98,6 +112,21 @@ export function Topbar({ actions }) {
       >
         {theme === 'light' ? <IconMoon /> : <IconSun />}
       </button>
+
+      {/* Déconnexion — visible uniquement sur mobile (sidebar gère le desktop) */}
+      {isMobile && (
+        <button
+          onClick={() => supabase.auth.signOut()}
+          title="Se déconnecter"
+          style={{
+            width: 32, height: 32, borderRadius: 7, cursor: 'pointer',
+            border: `0.5px solid ${t.borderLight}`, background: 'transparent',
+            color: t.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <IconLogout />
+        </button>
+      )}
     </div>
   )
 }

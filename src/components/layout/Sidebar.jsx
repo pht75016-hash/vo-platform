@@ -131,12 +131,29 @@ function NavItem({ item, active, badge }) {
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 import React from 'react'
+import { supabase } from '../../utils/supabase'
+
+function IconLogout() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3" />
+      <path d="M10.5 11L14 8l-3.5-3" />
+      <path d="M14 8H6" />
+    </svg>
+  )
+}
 
 export function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const vehicles = useStore((s) => s.vehicles)
   const userProfile = useStore((s) => s.userProfile)
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    // onAuthStateChange dans App.jsx bascule automatiquement vers Login
+  }
 
   const stockCount = vehicles.filter((v) => v.status === 'stock').length
   const badges = { stockCount }
@@ -202,19 +219,20 @@ export function Sidebar() {
       <div style={{
         padding: '10px 14px 14px',
         borderTop: `1px solid ${BORDER}`,
-        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-      }}
-        onClick={() => navigate('/settings')}
-      >
-        <div style={{
-          width: 30, height: 30, borderRadius: '50%',
-          background: '#2563EB', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 700, flexShrink: 0,
-        }}>
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <div
+          style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: '#2563EB', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, flexShrink: 0, cursor: 'pointer',
+          }}
+          onClick={() => navigate('/settings')}
+        >
           {initials}
         </div>
-        <div style={{ overflow: 'hidden' }}>
+        <div style={{ overflow: 'hidden', flex: 1, cursor: 'pointer' }} onClick={() => navigate('/settings')}>
           <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_H, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {userProfile.prenom || userProfile.nom
               ? `${userProfile.prenom} ${userProfile.nom}`.trim()
@@ -222,6 +240,20 @@ export function Sidebar() {
           </div>
           <div style={{ fontSize: 11, color: TEXT }}>Négociant VO</div>
         </div>
+        <button
+          onClick={handleSignOut}
+          title="Se déconnecter"
+          style={{
+            flexShrink: 0, width: 28, height: 28, borderRadius: 6,
+            border: `1px solid ${BORDER}`, background: 'transparent',
+            color: TEXT, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = TEXT; e.currentTarget.style.borderColor = BORDER }}
+        >
+          <IconLogout />
+        </button>
       </div>
     </nav>
   )
