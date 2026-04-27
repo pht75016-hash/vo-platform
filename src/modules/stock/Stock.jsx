@@ -9,7 +9,11 @@ import { MarginBadge, PhotoPlaceholder, FuelTag, TvaTag, DaysBadge } from '../..
 import * as XLSX from 'xlsx';
 import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings, IconDownload } from '../../components/Icons';
 
+const PRIORITY_LABELS = ['','Modérée','Importante','Haute'];
+const PRIORITY_COLOR  = '#F59E0B';
+
 const COL_DEFS = [
+  { id:'priorite',        label:'Priorité',    sortKey:'priorite',         group:'Identification' },
   { id:'marque',          label:'Marque',      sortKey:'marque',           group:'Identification' },
   { id:'modele',          label:'Modèle',      sortKey:'modele',           group:'Identification' },
   { id:'numeroVO',        label:'N° VO',       sortKey:'numeroVO',         group:'Identification' },
@@ -29,7 +33,7 @@ const COL_DEFS = [
   { id:'marge',           label:'Marge',       sortKey:null,               group:'Prix' },
   { id:'tva',             label:'TVA',         sortKey:'tva',              group:'Prix' },
 ];
-const DEFAULT_COLS = ['marque','modele','carburant','km','jours','achat','vente','marge','tva'];
+const DEFAULT_COLS = ['priorite','marque','modele','carburant','km','jours','achat','vente','marge','tva'];
 const COL_GROUPS = ['Identification','Véhicule','Suivi','Prix'];
 
 export default function Stock() {
@@ -139,7 +143,7 @@ export default function Stock() {
     if(f.puissanceMax) r=r.filter(v=>Number(v.puissanceFiscale||0)<=Number(f.puissanceMax));
     if(f.dateMECMin)   r=r.filter(v=>v.dateMEC>=f.dateMECMin);
     if(f.dateMECMax)   r=r.filter(v=>v.dateMEC<=f.dateMECMax);
-    if(sortKey){r=[...r].sort((a,b)=>{let va=a[sortKey]||'',vb=b[sortKey]||'';if(['kilometrage','kmAffiche','prixAchatHT','prixAchatTTC','prixVenteHT','prixVenteTTC','puissanceFiscale'].includes(sortKey)){va=Number(va)||0;vb=Number(vb)||0;return sortDir==='asc'?va-vb:vb-va;}va=String(va).toLowerCase();vb=String(vb).toLowerCase();return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);});}
+    if(sortKey){r=[...r].sort((a,b)=>{let va=a[sortKey]||'',vb=b[sortKey]||'';if(['kilometrage','kmAffiche','prixAchatHT','prixAchatTTC','prixVenteHT','prixVenteTTC','puissanceFiscale','priorite'].includes(sortKey)){va=Number(va)||0;vb=Number(vb)||0;return sortDir==='asc'?va-vb:vb-va;}va=String(va).toLowerCase();vb=String(vb).toLowerCase();return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);});}
     return r;
   }, [vehicles, search, sortKey, sortDir, filters]);
 
@@ -232,6 +236,12 @@ export default function Stock() {
   const renderCell = (colId, v, dp, td) => {
     const s = STATUTS.find(x=>x.k===(v.statut||'stock'))||STATUTS[0];
     switch(colId) {
+      case 'priorite': {
+        const p=Number(v.priorite)||0;
+        return <td key={colId} style={{...td,whiteSpace:'nowrap'}}>
+          {p>0 ? <span title={PRIORITY_LABELS[p]} style={{color:PRIORITY_COLOR,letterSpacing:1,fontSize:15}}>{'★'.repeat(p)}</span> : <span style={{color:'#D1D5DB',fontSize:12}}>—</span>}
+        </td>;
+      }
       case 'marque':          return <td key={colId} style={{...td,fontWeight:600}}>{v.marque||'—'}</td>;
       case 'modele':          return <td key={colId} style={td}>{v.modele||'—'}</td>;
       case 'numeroVO':        return <td key={colId} style={{...td,fontFamily:'monospace',fontSize:11,color:P.textSoft}}>{v.numeroVO||'—'}</td>;
@@ -390,9 +400,10 @@ export default function Stock() {
                   <tbody>
                     {filtered.map(v=>{
                       const td={padding:'8px 10px',fontSize:13,borderBottom:`1px solid ${P.border}`,whiteSpace:'nowrap',verticalAlign:'middle'};
-                      const dp=getDP(v); const isExp=showSteps&&expandedSteps.has(v.id);
+                      const dp=getDP(v); const isExp=expandedSteps.has(v.id);
                       return [
-                        <tr key={v.id} style={{cursor:'pointer'}} onClick={()=>showSteps&&toggleExpand(v.id)} onMouseEnter={e=>e.currentTarget.style.background='#F9FAFB'} onMouseLeave={e=>e.currentTarget.style.background=''}>
+                        <tr key={v.id} style={{cursor:'pointer',transition:'background 0.1s'}} onClick={()=>toggleExpand(v.id)} onMouseEnter={e=>e.currentTarget.style.background='#E8EDF4'} onMouseLeave={e=>e.currentTarget.style.background=isExp?'#EEF2F8':''}>
+
                           <td style={{...td,padding:'6px 10px'}}>{v.photo?<img src={v.photo} alt="" style={{width:40,height:40,borderRadius:6,objectFit:'cover',display:'block'}}/>:<PhotoPlaceholder size={40}/>}</td>
                           <td style={{...td,fontWeight:700,color:P.accent}}>{v.immatriculation||'—'}</td>
                           {visibleDefs.map(d=>renderCell(d.id,v,dp,td))}
@@ -506,6 +517,24 @@ export default function Stock() {
                 <div style={grp}><label style={lbl}>Date achat (Cerfa)</label><input style={inp('dateAchat',false)} type="datetime-local" value={form.dateAchat} onChange={e=>updateField('dateAchat',e.target.value)}/></div>
                 <div style={grp}><label style={lbl}>Date MEC</label><input style={inp('dateMEC',false)} type="date" value={form.dateMEC} onChange={e=>updateField('dateMEC',e.target.value)}/></div>
                 <div style={{...grp,gridColumn:'1/-1'}}><label style={lbl}>Emplacement</label><input style={inp('emplacement',false)} value={form.emplacement||''} onChange={e=>updateField('emplacement',e.target.value)} placeholder="Ex : Hall A, Parking 3, Extérieur..."/></div>
+                <div style={{...grp,gridColumn:'1/-1'}}>
+                  <label style={lbl}>Priorité de traitement</label>
+                  <div style={{display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+                    {[1,2,3].map(n=>{
+                      const active=(form.priorite||0)>=n;
+                      return (
+                        <button key={n} type="button" onClick={()=>updateField('priorite',(form.priorite||0)===n?0:n)}
+                          style={{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',fontSize:26,lineHeight:1,color:active?PRIORITY_COLOR:'#D1D5DB',transition:'color 0.15s,transform 0.1s'}}
+                          onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.2)'}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)'}}>★</button>
+                      );
+                    })}
+                    {(form.priorite||0)>0&&(
+                      <span style={{fontSize:12,color:PRIORITY_COLOR,fontWeight:600,marginLeft:4}}>{PRIORITY_LABELS[form.priorite||0]}</span>
+                    )}
+                    {(form.priorite||0)===0&&<span style={{fontSize:12,color:P.textSoft,marginLeft:4}}>Aucune</span>}
+                  </div>
+                </div>
 
                 <div style={sec_}>Véhicule</div>
                 <div style={grp}><label style={lbl}>Marque *</label><select style={sel('marque',true)} value={form.marque} onChange={e=>updateField('marque',e.target.value)}><option value="">Sélectionner</option>{Object.keys(MQ).sort().map(m=><option key={m}>{m}</option>)}</select>{attempted&&!form.marque&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>

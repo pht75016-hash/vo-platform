@@ -27,7 +27,7 @@ export const STATUTS = [
 ];
 
 export const EMPTY_FORM = {
-  statut:"stock",immatriculation:"",numeroVO:"",dateAchat:"",marque:"",modele:"",
+  statut:"stock",priorite:0,immatriculation:"",numeroVO:"",dateAchat:"",marque:"",modele:"",
   carburant:"",capaciteBatterie:"",chargeurAC:true,chargeurDC:false,typeDC:"COMBO CCS",
   puissanceAC:"",puissanceDC:"",kilometrage:"",dateMEC:"",boite:"",categorie:"",
   nbPlaces:"5",tva:"TVA sur marge",prixAchatHT:"",prixAchatTTC:"",prixVenteHT:"",
