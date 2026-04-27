@@ -6,7 +6,30 @@ import { resizeImage } from '../../utils/imageUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import StepTracker from '../../components/StepTracker';
 import { MarginBadge, PhotoPlaceholder, FuelTag, TvaTag, DaysBadge } from '../../components/VehicleBadges';
-import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown } from '../../components/Icons';
+import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings } from '../../components/Icons';
+
+const COL_DEFS = [
+  { id:'marque',          label:'Marque',      sortKey:'marque',           group:'Identification' },
+  { id:'modele',          label:'Modèle',      sortKey:'modele',           group:'Identification' },
+  { id:'numeroVO',        label:'N° VO',       sortKey:'numeroVO',         group:'Identification' },
+  { id:'vin',             label:'VIN',          sortKey:'vin',              group:'Identification' },
+  { id:'statut',          label:'Statut',      sortKey:'statut',           group:'Identification' },
+  { id:'carburant',       label:'Carburant',   sortKey:'carburant',        group:'Véhicule' },
+  { id:'boite',           label:'Boîte',       sortKey:'boite',            group:'Véhicule' },
+  { id:'categorie',       label:'Catégorie',   sortKey:'categorie',        group:'Véhicule' },
+  { id:'puissanceFiscale',label:'CV fiscaux',  sortKey:'puissanceFiscale', group:'Véhicule' },
+  { id:'km',              label:'Km',          sortKey:'kmAffiche',        group:'Suivi' },
+  { id:'jours',           label:'Jours stock', sortKey:'dateAchat',        group:'Suivi' },
+  { id:'dateAchat',       label:'Date achat',  sortKey:'dateAchat',        group:'Suivi' },
+  { id:'dateMEC',         label:'MEC',         sortKey:'dateMEC',          group:'Suivi' },
+  { id:'emplacement',     label:'Emplacement', sortKey:'emplacement',      group:'Suivi' },
+  { id:'achat',           label:'Achat',       sortKey:'prixAchatTTC',     group:'Prix' },
+  { id:'vente',           label:'Vente',       sortKey:'prixVenteTTC',     group:'Prix' },
+  { id:'marge',           label:'Marge',       sortKey:null,               group:'Prix' },
+  { id:'tva',             label:'TVA',         sortKey:'tva',              group:'Prix' },
+];
+const DEFAULT_COLS = ['marque','modele','carburant','km','jours','achat','vente','marge','tva'];
+const COL_GROUPS = ['Identification','Véhicule','Suivi','Prix'];
 
 export default function Stock() {
   const mob = useIsMobile();
@@ -14,6 +37,8 @@ export default function Stock() {
   const addVehicle    = useStore(s => s.addVehicle);
   const updateVehicle = useStore(s => s.updateVehicle);
   const deleteVehicle = useStore(s => s.deleteVehicle);
+  const stockListCols = useStore(s => s.stockListCols);
+  const setStockListCols = useStore(s => s.setStockListCols);
   const [viewMode, setViewMode] = useState('list');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -28,6 +53,8 @@ export default function Stock() {
   const [showSteps, setShowSteps] = useState(true);
   const [expandedSteps, setExpandedSteps] = useState(new Set());
   const fileRef = useRef(null);
+  const colBtnRef = useRef(null);
+  const [showColPicker, setShowColPicker] = useState(false);
 
   const toggleSort = (key) => { if(sortKey===key) setSortDir(d=>d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('asc'); } };
   const toggleExpand = (id) => setExpandedSteps(prev => { const n = new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
@@ -166,7 +193,32 @@ export default function Stock() {
     <div style={fGrp}><div style={fLbl}>MEC</div><div style={{display:'flex',flexDirection:'column',gap:4}}><input style={fInp} type="date" value={filters.dateMECMin} onChange={e=>updateFilter('dateMECMin',e.target.value)}/><input style={fInp} type="date" value={filters.dateMECMax} onChange={e=>updateFilter('dateMECMax',e.target.value)}/></div></div>
   </>);
 
-  const columns = [{label:'',key:null},{label:'Immat.',key:'immatriculation'},{label:'Marque',key:'marque'},{label:'Modèle',key:'modele'},{label:'Carburant',key:'carburant'},{label:'Km',key:'kmAffiche'},{label:'Jours',key:'dateAchat'},{label:'Achat',key:'prixAchatTTC'},{label:'Vente',key:'prixVenteTTC'},{label:'Marge',key:null},{label:'TVA',key:'tva'},{label:'',key:null}];
+  const visibleDefs = COL_DEFS.filter(d => stockListCols.includes(d.id));
+  const columns = [{label:'',key:null},{label:'Immat.',key:'immatriculation'},...visibleDefs.map(d=>({label:d.label,key:d.sortKey})),{label:'',key:null}];
+  const renderCell = (colId, v, dp, td) => {
+    const s = STATUTS.find(x=>x.k===(v.statut||'stock'))||STATUTS[0];
+    switch(colId) {
+      case 'marque':          return <td key={colId} style={{...td,fontWeight:600}}>{v.marque||'—'}</td>;
+      case 'modele':          return <td key={colId} style={td}>{v.modele||'—'}</td>;
+      case 'numeroVO':        return <td key={colId} style={{...td,fontFamily:'monospace',fontSize:11,color:P.textSoft}}>{v.numeroVO||'—'}</td>;
+      case 'vin':             return <td key={colId} style={{...td,fontFamily:'monospace',fontSize:11,color:P.textSoft,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis'}}>{v.vin||'—'}</td>;
+      case 'statut':          return <td key={colId} style={td}><span style={{background:s.bg,color:s.color,fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:10}}>{s.l}</span></td>;
+      case 'carburant':       return <td key={colId} style={td}><FuelTag carburant={v.carburant}/></td>;
+      case 'boite':           return <td key={colId} style={td}>{v.boite||'—'}</td>;
+      case 'categorie':       return <td key={colId} style={td}>{v.categorie||'—'}</td>;
+      case 'puissanceFiscale':return <td key={colId} style={td}>{v.puissanceFiscale?v.puissanceFiscale+' CV':'—'}</td>;
+      case 'km':              return <td key={colId} style={td}>{fmtK(v.kmAffiche||v.kilometrage)}</td>;
+      case 'jours':           return <td key={colId} style={td}><DaysBadge dateAchat={v.dateAchat}/></td>;
+      case 'dateAchat':       return <td key={colId} style={td}>{fmtD(v.dateAchat)}</td>;
+      case 'dateMEC':         return <td key={colId} style={td}>{fmtD(v.dateMEC)}</td>;
+      case 'emplacement':     return <td key={colId} style={td}>{v.emplacement||'—'}</td>;
+      case 'achat':           return <td key={colId} style={td}>{dp.achat}</td>;
+      case 'vente':           return <td key={colId} style={{...td,fontWeight:700}}>{dp.vente}</td>;
+      case 'marge':           return <td key={colId} style={td}><MarginBadge v={v} compact/></td>;
+      case 'tva':             return <td key={colId} style={td}><TvaTag tva={v.tva}/></td>;
+      default:                return <td key={colId} style={td}>—</td>;
+    }
+  };
 
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",color:P.text}}>
@@ -187,6 +239,11 @@ export default function Stock() {
             <button style={{padding:'7px 10px',background:viewMode==='list'?P.accent:'transparent',color:viewMode==='list'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('list')}><IconList/></button>
             <button style={{padding:'7px 10px',background:viewMode==='grid'?P.accent:'transparent',color:viewMode==='grid'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('grid')}><IconGrid/></button>
           </div>}
+          {!mob&&viewMode==='list'&&(
+            <button ref={colBtnRef} onClick={()=>setShowColPicker(p=>!p)} title="Personnaliser les colonnes" style={{display:'flex',alignItems:'center',background:showColPicker?P.accentSoft:P.card,color:showColPicker?P.accent:P.textSoft,border:`1px solid ${showColPicker?P.accent:P.border}`,borderRadius:8,padding:'7px 10px',cursor:'pointer'}}>
+              <IconSettings/>
+            </button>
+          )}
           <button style={{display:'flex',alignItems:'center',gap:6,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:mob?'10px 14px':'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={openAdd}>
             <IconPlus/>{mob?'':'Ajouter'}
           </button>
@@ -285,15 +342,7 @@ export default function Stock() {
                         <tr key={v.id} style={{cursor:'pointer'}} onClick={()=>showSteps&&toggleExpand(v.id)} onMouseEnter={e=>e.currentTarget.style.background='#F9FAFB'} onMouseLeave={e=>e.currentTarget.style.background=''}>
                           <td style={{...td,padding:'6px 10px'}}>{v.photo?<img src={v.photo} alt="" style={{width:40,height:40,borderRadius:6,objectFit:'cover',display:'block'}}/>:<PhotoPlaceholder size={40}/>}</td>
                           <td style={{...td,fontWeight:700,color:P.accent}}>{v.immatriculation||'—'}</td>
-                          <td style={{...td,fontWeight:600}}>{v.marque}</td>
-                          <td style={td}>{v.modele}</td>
-                          <td style={td}><FuelTag carburant={v.carburant}/></td>
-                          <td style={td}>{fmtK(v.kmAffiche||v.kilometrage)}</td>
-                          <td style={td}><DaysBadge dateAchat={v.dateAchat}/></td>
-                          <td style={td}>{dp.achat}</td>
-                          <td style={{...td,fontWeight:700}}>{dp.vente}</td>
-                          <td style={td}><MarginBadge v={v} compact/></td>
-                          <td style={td}><TvaTag tva={v.tva}/></td>
+                          {visibleDefs.map(d=>renderCell(d.id,v,dp,td))}
                           <td style={{...td,whiteSpace:'nowrap'}} onClick={e=>e.stopPropagation()}>
                             <button style={ibtn} onClick={()=>openEdit(v)} onMouseEnter={e=>e.currentTarget.style.background=P.accentSoft} onMouseLeave={e=>e.currentTarget.style.background=''}><span style={{color:P.accent}}><IconPencil/></span></button>
                             <button style={{...ibtn,marginLeft:2}} onClick={()=>setDeleteConfirm(v.id)} onMouseEnter={e=>e.currentTarget.style.background=P.redSoft} onMouseLeave={e=>e.currentTarget.style.background=''}><span style={{color:P.red}}><IconTrash/></span></button>
@@ -313,6 +362,38 @@ export default function Stock() {
           </div>
         </div>
       )}
+
+      {/* COLUMN PICKER */}
+      {showColPicker&&!mob&&(()=>{
+        const rect=colBtnRef.current?.getBoundingClientRect();
+        return (
+          <div style={{position:'fixed',inset:0,zIndex:999}} onClick={()=>setShowColPicker(false)}>
+            <div style={{position:'fixed',top:rect?rect.bottom+6:100,right:rect?window.innerWidth-rect.right:20,background:P.card,border:`1px solid ${P.border}`,borderRadius:12,padding:'16px 18px',boxShadow:'0 8px 32px rgba(0,0,0,0.12)',minWidth:230,maxHeight:'80vh',overflowY:'auto',zIndex:1000}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+                <span style={{fontSize:13,fontWeight:700,color:P.text}}>Colonnes visibles</span>
+                <button onClick={()=>setStockListCols([...DEFAULT_COLS])} style={{background:'none',border:'none',cursor:'pointer',color:P.accent,fontSize:11,fontWeight:600}}>Réinitialiser</button>
+              </div>
+              {COL_GROUPS.map(grp=>{
+                const grpCols=COL_DEFS.filter(d=>d.group===grp);
+                return (
+                  <div key={grp} style={{marginBottom:12}}>
+                    <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',color:P.textSoft,marginBottom:5,paddingBottom:3,borderBottom:`1px solid ${P.border}`}}>{grp}</div>
+                    {grpCols.map(def=>{
+                      const checked=stockListCols.includes(def.id);
+                      return (
+                        <label key={def.id} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 2px',cursor:'pointer',borderRadius:6}}>
+                          <input type="checkbox" checked={checked} onChange={()=>setStockListCols(checked?stockListCols.filter(c=>c!==def.id):[...stockListCols,def.id])} style={{accentColor:P.accent,width:14,height:14,flexShrink:0,cursor:'pointer'}}/>
+                          <span style={{fontSize:13,color:checked?P.text:P.textSoft}}>{def.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* FILTRES MOBILE */}
       {showFilters&&mob&&(

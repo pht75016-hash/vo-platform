@@ -67,6 +67,8 @@ export const useStore = create(persist(
     setTheme: (t) => set({ theme: t }),
     moduleOrder: ['notes', 'ventes', 'crm', 'documents', 'stock', 'atelier', 'location'],
     setModuleOrder: (order) => set({ moduleOrder: order }),
+    stockListCols: ['marque','modele','carburant','km','jours','achat','vente','marge','tva'],
+    setStockListCols: (cols) => set({ stockListCols: cols }),
   }),
   {
     name: 'vo_platform',
@@ -78,6 +80,7 @@ export const useStore = create(persist(
       userProfile: s.userProfile,
       theme: s.theme,
       moduleOrder: s.moduleOrder,
+      stockListCols: s.stockListCols,
     }),
   }
 ))

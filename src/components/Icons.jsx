@@ -17,3 +17,4 @@ export function IconSort({active,dir}){
   if(active) return <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{transform:dir==="desc"?"rotate(180deg)":"",transition:"transform 0.2s"}}><path d="M2 6l3-3 3 3"/></svg>;
   return <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{opacity:0.2}}><path d="M2 4l3-2 3 2M2 6l3 2 3-2"/></svg>;
 }
+export function IconSettings(){return <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="3"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.22 3.22l1.42 1.42M15.36 15.36l1.42 1.42M3.22 16.78l1.42-1.42M15.36 4.64l1.42-1.42"/></svg>;}
