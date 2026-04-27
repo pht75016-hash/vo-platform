@@ -28,7 +28,7 @@ export function AppShell({ children, topbarActions }) {
         paddingBottom: isMobile ? 56 : 0,
       }}>
         <Topbar actions={topbarActions} />
-        <main style={{ flex: 1, padding: isMobile ? 16 : 24, overflowX: 'hidden' }}>
+        <main style={{ flex: 1, padding: isMobile ? 16 : 24 }}>
           {children}
         </main>
       </div>

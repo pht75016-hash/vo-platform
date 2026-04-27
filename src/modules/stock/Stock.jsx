@@ -259,7 +259,7 @@ export default function Stock() {
       {/* TOOLBAR */}
       <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:mob?14:20}}>
         <span style={{background:P.accentSoft,color:P.accent,fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20,marginRight:4}}>{filtered.length}/{vehicles.length}</span>
-          <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',gap:8,flex:mob?1:undefined,minWidth:mob?0:180}}>
+          <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',gap:8,flex:mob?1:undefined,minWidth:mob?0:160,maxWidth:mob?undefined:260}}>
             <IconSearch/>
             <input style={{border:'none',outline:'none',fontSize:mob?16:13,background:'transparent',flex:1,color:P.text,minWidth:0}} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
