@@ -257,12 +257,24 @@ export default function Stock() {
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",color:P.text}}>
       {/* TOOLBAR */}
-      <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:mob?14:20}}>
-        <span style={{background:P.accentSoft,color:P.accent,fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20,marginRight:4}}>{filtered.length}/{vehicles.length}</span>
-          <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',gap:8,flex:mob?1:undefined,minWidth:mob?0:160,maxWidth:mob?undefined:260}}>
+      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:mob?14:20}}>
+        {/* Ligne recherche — pleine largeur sur mobile */}
+        {mob&&(
+          <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:'9px 12px',gap:8}}>
             <IconSearch/>
-            <input style={{border:'none',outline:'none',fontSize:mob?16:13,background:'transparent',flex:1,color:P.text,minWidth:0}} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <input style={{border:'none',outline:'none',fontSize:16,background:'transparent',flex:1,color:P.text,minWidth:0}} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            {search&&<button onClick={()=>setSearch('')} style={{background:'none',border:'none',cursor:'pointer',color:P.textSoft,padding:2,display:'flex',alignItems:'center'}}><IconClose/></button>}
           </div>
+        )}
+        {/* Ligne boutons */}
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <span style={{background:P.accentSoft,color:P.accent,fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20}}>{filtered.length}/{vehicles.length}</span>
+          {!mob&&(
+            <div style={{display:'flex',alignItems:'center',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,padding:'7px 12px',gap:8,minWidth:160,maxWidth:260}}>
+              <IconSearch/>
+              <input style={{border:'none',outline:'none',fontSize:13,background:'transparent',flex:1,color:P.text,minWidth:0}} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            </div>
+          )}
           <button onClick={()=>setShowFilters(f=>!f)} style={{display:'flex',alignItems:'center',gap:5,background:showFilters&&!mob?P.accentSoft:P.card,color:showFilters&&!mob?P.accent:P.textSoft,border:`1px solid ${showFilters&&!mob?P.accent:P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
             <IconFilter/>{mob?'':'Filtres'}{activeFilterCount>0&&<span style={{background:P.accent,color:'#fff',fontSize:10,padding:'1px 6px',borderRadius:10,fontWeight:700}}>{activeFilterCount}</span>}
           </button>
@@ -278,12 +290,15 @@ export default function Stock() {
               <IconSettings/>
             </button>
           )}
-          <button onClick={exportToExcel} title="Exporter en Excel" style={{display:'flex',alignItems:'center',gap:mob?0:5,background:P.card,color:P.textSoft,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 10px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
-            <IconDownload/>{!mob&&<span>Excel</span>}
-          </button>
+          {!mob&&(
+            <button onClick={exportToExcel} title="Exporter en Excel" style={{display:'flex',alignItems:'center',gap:5,background:P.card,color:P.textSoft,border:`1px solid ${P.border}`,borderRadius:8,padding:'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+              <IconDownload/><span>Excel</span>
+            </button>
+          )}
           <button style={{display:'flex',alignItems:'center',gap:6,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:mob?'10px 14px':'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={openAdd}>
             <IconPlus/>{mob?'':'Ajouter'}
           </button>
+        </div>
       </div>
 
       {/* CONTENU */}
