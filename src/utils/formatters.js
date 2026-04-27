@@ -2,7 +2,7 @@ export const fmtP = (v) => v ? Number(v).toLocaleString("fr-FR",{maximumFraction
 export const fmtK = (v) => v ? Number(v).toLocaleString("fr-FR")+" km" : "—";
 export const fmtD = (d) => {
   if(!d) return "—";
-  const p = d.split("-");
+  const p = d.split("T")[0].split("-");
   return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : d;
 };
 export const r2 = (v) => Math.round(v*100)/100;

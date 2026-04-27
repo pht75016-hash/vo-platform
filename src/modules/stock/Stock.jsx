@@ -77,7 +77,7 @@ export default function Stock() {
     setForm(prev=>({...prev, photo:b}));
   };
 
-  const openAdd  = () => { setForm({...EMPTY_FORM,steps:JSON.parse(JSON.stringify(DEFAULT_STEPS))}); setEditId(null); setAttempted(false); setShowForm(true); };
+  const openAdd  = () => { setForm({...EMPTY_FORM, dateAchat: new Date().toISOString().slice(0,16), steps:JSON.parse(JSON.stringify(DEFAULT_STEPS))}); setEditId(null); setAttempted(false); setShowForm(true); };
   const openEdit = (v) => { setForm({...v}); setEditId(v.id); setAttempted(false); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setEditId(null); setAttempted(false); };
 
@@ -368,7 +368,7 @@ export default function Stock() {
                 <div style={grp}><label style={lbl}>Immatriculation *</label><input style={inp('immatriculation',true)} value={form.immatriculation} onChange={e=>updateField('immatriculation',e.target.value.toUpperCase())} placeholder="AB-123-CD"/>{attempted&&!form.immatriculation.trim()&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>
                 <div style={grp}><label style={lbl}>N° VO</label><input style={inp('numeroVO',false)} value={form.numeroVO} onChange={e=>updateField('numeroVO',e.target.value)} placeholder="VO-2024-001"/></div>
                 <div style={grp}><label style={lbl}>VIN</label><input style={{...inp('vin',false),fontFamily:'monospace',letterSpacing:1}} value={form.vin} onChange={e=>updateField('vin',e.target.value.toUpperCase())} maxLength={17} placeholder="17 car."/></div>
-                <div style={grp}><label style={lbl}>Date achat (Cerfa)</label><input style={inp('dateAchat',false)} type="date" value={form.dateAchat} onChange={e=>updateField('dateAchat',e.target.value)}/></div>
+                <div style={grp}><label style={lbl}>Date achat (Cerfa)</label><input style={inp('dateAchat',false)} type="datetime-local" value={form.dateAchat} onChange={e=>updateField('dateAchat',e.target.value)}/></div>
                 <div style={grp}><label style={lbl}>Date MEC</label><input style={inp('dateMEC',false)} type="date" value={form.dateMEC} onChange={e=>updateField('dateMEC',e.target.value)}/></div>
 
                 <div style={sec_}>Véhicule</div>
