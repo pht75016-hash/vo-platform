@@ -1,12 +1,13 @@
 import { useState, useMemo, useRef } from 'react';
 import { P, STATUTS, EMPTY_FORM, EMPTY_FILTERS, DEFAULT_STEPS, MQ, CARBURANTS, BOITES, CATEGORIES, TVA_TYPES } from '../../utils/constants';
-import { fmtP, fmtK, fmtD, r2, daysColor, fmtDays, calcMargin } from '../../utils/formatters';
+import { fmtP, fmtK, fmtD, r2, daysColor, fmtDays, calcMargin, daysInStock } from '../../utils/formatters';
 import { useStore } from '../../store/useStore';
 import { resizeImage } from '../../utils/imageUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import StepTracker from '../../components/StepTracker';
 import { MarginBadge, PhotoPlaceholder, FuelTag, TvaTag, DaysBadge } from '../../components/VehicleBadges';
-import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings } from '../../components/Icons';
+import * as XLSX from 'xlsx';
+import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings, IconDownload } from '../../components/Icons';
 
 const COL_DEFS = [
   { id:'marque',          label:'Marque',      sortKey:'marque',           group:'Identification' },
@@ -164,6 +165,39 @@ export default function Stock() {
 
   const getDP = (v) => v.tva==='TVA déductible' ? {achat:fmtP(v.prixAchatHT),vente:fmtP(v.prixVenteTTC)} : {achat:fmtP(v.prixAchatTTC),vente:fmtP(v.prixVenteTTC)};
 
+  const exportToExcel = () => {
+    const rows = filtered.map(v => {
+      const m = calcMargin(v);
+      return {
+        'Immatriculation': v.immatriculation||'',
+        'Statut': v.statut||'stock',
+        'N° VO': v.numeroVO||'',
+        'Marque': v.marque||'',
+        'Modèle': v.modele||'',
+        'Carburant': v.carburant||'',
+        'Boîte': v.boite||'',
+        'Catégorie': v.categorie||'',
+        'CV fiscaux': v.puissanceFiscale||'',
+        'Km affiché': v.kmAffiche||v.kilometrage||'',
+        'Emplacement': v.emplacement||'',
+        'Date achat': fmtD(v.dateAchat),
+        'Date MEC': fmtD(v.dateMEC),
+        'Jours stock': daysInStock(v.dateAchat)??'',
+        'TVA': v.tva||'',
+        'Prix achat HT': v.prixAchatHT||'',
+        'Prix achat TTC': v.prixAchatTTC||'',
+        'Prix vente TTC': v.prixVenteTTC||'',
+        'Marge (€)': m?.marge??'',
+        'Marge (%)': m?.pct??'',
+        'VIN': v.vin||'',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock');
+    XLSX.writeFile(wb, `stock_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   const filterContent = () => (<>
     <div style={{...fGrp,paddingBottom:12,marginBottom:14,borderBottom:`1px solid ${P.border}`}}>
       <div style={{...fLbl,marginBottom:6}}>Vue</div>
@@ -235,15 +269,18 @@ export default function Stock() {
           <button onClick={toggleAllSteps} style={{display:'flex',alignItems:'center',gap:5,background:showSteps?P.accentSoft:P.card,color:showSteps?P.accent:P.textSoft,border:`1px solid ${showSteps?P.accent:P.border}`,borderRadius:8,padding:mob?'9px 12px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
             {mob?'📋':'📋 Étapes'}
           </button>
-          {!mob&&<div style={{display:'flex',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,overflow:'hidden'}}>
+          <div style={{display:'flex',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,overflow:'hidden'}}>
             <button style={{padding:'7px 10px',background:viewMode==='list'?P.accent:'transparent',color:viewMode==='list'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('list')}><IconList/></button>
             <button style={{padding:'7px 10px',background:viewMode==='grid'?P.accent:'transparent',color:viewMode==='grid'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('grid')}><IconGrid/></button>
-          </div>}
+          </div>
           {!mob&&viewMode==='list'&&(
             <button ref={colBtnRef} onClick={()=>setShowColPicker(p=>!p)} title="Personnaliser les colonnes" style={{display:'flex',alignItems:'center',background:showColPicker?P.accentSoft:P.card,color:showColPicker?P.accent:P.textSoft,border:`1px solid ${showColPicker?P.accent:P.border}`,borderRadius:8,padding:'7px 10px',cursor:'pointer'}}>
               <IconSettings/>
             </button>
           )}
+          <button onClick={exportToExcel} title="Exporter en Excel" style={{display:'flex',alignItems:'center',gap:mob?0:5,background:P.card,color:P.textSoft,border:`1px solid ${P.border}`,borderRadius:8,padding:mob?'9px 10px':'7px 12px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            <IconDownload/>{!mob&&<span>Excel</span>}
+          </button>
           <button style={{display:'flex',alignItems:'center',gap:6,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:mob?'10px 14px':'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={openAdd}>
             <IconPlus/>{mob?'':'Ajouter'}
           </button>
@@ -274,7 +311,7 @@ export default function Stock() {
                 <div style={{fontSize:15,fontWeight:600}}>Aucun résultat</div>
                 {activeFilterCount>0&&<button onClick={()=>setFilters({...EMPTY_FILTERS})} style={{marginTop:12,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Réinitialiser</button>}
               </div>
-            ) : mob||viewMode==='grid' ? (
+            ) : viewMode==='grid' ? (
               /* VUE GRILLE */
               <div style={{display:'grid',gridTemplateColumns:mob?'1fr':'repeat(auto-fill,minmax(320px,1fr))',gap:mob?10:14}}>
                 {filtered.map(v=>{
@@ -321,7 +358,8 @@ export default function Stock() {
             ) : (
               /* VUE LISTE */
               <div style={{background:P.card,borderRadius:12,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
-                <table style={{width:'100%',borderCollapse:'separate',borderSpacing:0}}>
+                <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+                <table style={{width:'100%',borderCollapse:'separate',borderSpacing:0,minWidth:mob?500:undefined}}>
                   <thead>
                     <tr>
                       {columns.map((col,i)=>(
@@ -357,6 +395,7 @@ export default function Stock() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>
