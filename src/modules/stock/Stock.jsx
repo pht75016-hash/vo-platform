@@ -7,7 +7,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import StepTracker from '../../components/StepTracker';
 import { MarginBadge, PhotoPlaceholder, FuelTag, TvaTag, DaysBadge } from '../../components/VehicleBadges';
 import * as XLSX from 'xlsx';
-import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings, IconDownload } from '../../components/Icons';
+import { IconPlus, IconPencil, IconTrash, IconList, IconGrid, IconClose, IconCar, IconSearch, IconFilter, IconReset, IconCamera, IconSort, IconChevDown, IconSettings, IconDownload, IconKanban } from '../../components/Icons';
 
 const PRIORITY_LABELS = ['','Modérée','Importante','Haute'];
 const PRIORITY_COLOR  = '#F59E0B';
@@ -42,8 +42,10 @@ export default function Stock() {
   const addVehicle    = useStore(s => s.addVehicle);
   const updateVehicle = useStore(s => s.updateVehicle);
   const deleteVehicle = useStore(s => s.deleteVehicle);
-  const stockListCols = useStore(s => s.stockListCols);
+  const stockListCols   = useStore(s => s.stockListCols);
   const setStockListCols = useStore(s => s.setStockListCols);
+  const kanbanCols      = useStore(s => s.kanbanCols) || [{id:'entree',label:'Entrée stock'},{id:'preparation',label:'En préparation'},{id:'pret',label:'Prêt à vendre'},{id:'vendu',label:'Vendu'}];
+  const setKanbanCols   = useStore(s => s.setKanbanCols);
   const [viewMode, setViewMode] = useState('list');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -60,6 +62,12 @@ export default function Stock() {
   const fileRef = useRef(null);
   const colBtnRef = useRef(null);
   const [showColPicker, setShowColPicker] = useState(false);
+  const [editingColId, setEditingColId] = useState(null);
+  const [editingColLabel, setEditingColLabel] = useState('');
+  const saveColName = (id) => {
+    if(editingColLabel.trim()) setKanbanCols(kanbanCols.map(c=>c.id===id?{...c,label:editingColLabel.trim()}:c));
+    setEditingColId(null);
+  };
 
   const toggleSort = (key) => { if(sortKey===key) setSortDir(d=>d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('asc'); } };
   const toggleExpand = (id) => setExpandedSteps(prev => { const n = new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
@@ -238,8 +246,13 @@ export default function Stock() {
     switch(colId) {
       case 'priorite': {
         const p=Number(v.priorite)||0;
-        return <td key={colId} style={{...td,whiteSpace:'nowrap'}}>
-          {p>0 ? <span title={PRIORITY_LABELS[p]} style={{color:PRIORITY_COLOR,letterSpacing:1,fontSize:15}}>{'★'.repeat(p)}</span> : <span style={{color:'#D1D5DB',fontSize:12}}>—</span>}
+        return <td key={colId} style={{...td,whiteSpace:'nowrap'}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',gap:0}}>
+            {[1,2,3].map(n=>(
+              <button key={n} onClick={()=>updateVehicle(v.id,{priorite:p===n?0:n})} title={PRIORITY_LABELS[n]}
+                style={{background:'none',border:'none',cursor:'pointer',padding:'1px 2px',fontSize:16,lineHeight:1,color:p>=n?PRIORITY_COLOR:'#D1D5DB',transition:'color 0.1s'}}>★</button>
+            ))}
+          </div>
         </td>;
       }
       case 'marque':          return <td key={colId} style={{...td,fontWeight:600}}>{v.marque||'—'}</td>;
@@ -293,7 +306,7 @@ export default function Stock() {
           </button>
           <div style={{display:'flex',background:P.card,border:`1px solid ${P.border}`,borderRadius:8,overflow:'hidden'}}>
             <button style={{padding:'7px 10px',background:viewMode==='list'?P.accent:'transparent',color:viewMode==='list'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('list')}><IconList/></button>
-            <button style={{padding:'7px 10px',background:viewMode==='grid'?P.accent:'transparent',color:viewMode==='grid'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('grid')}><IconGrid/></button>
+            <button style={{padding:'7px 10px',background:viewMode==='grid'?P.accent:'transparent',color:viewMode==='grid'?'#fff':P.textSoft,border:'none',cursor:'pointer',display:'flex',alignItems:'center'}} onClick={()=>setViewMode('grid')}><IconKanban/></button>
           </div>
           {!mob&&viewMode==='list'&&(
             <button ref={colBtnRef} onClick={()=>setShowColPicker(p=>!p)} title="Personnaliser les colonnes" style={{display:'flex',alignItems:'center',background:showColPicker?P.accentSoft:P.card,color:showColPicker?P.accent:P.textSoft,border:`1px solid ${showColPicker?P.accent:P.border}`,borderRadius:8,padding:'7px 10px',cursor:'pointer'}}>
@@ -337,48 +350,69 @@ export default function Stock() {
                 {activeFilterCount>0&&<button onClick={()=>setFilters({...EMPTY_FILTERS})} style={{marginTop:12,background:P.accent,color:'#fff',border:'none',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Réinitialiser</button>}
               </div>
             ) : viewMode==='grid' ? (
-              /* VUE GRILLE */
-              <div style={{display:'grid',gridTemplateColumns:mob?'1fr':'repeat(auto-fill,minmax(320px,1fr))',gap:mob?10:14}}>
-                {filtered.map(v=>{
-                  const dp=getDP(v); const isExp=expandedSteps.has(v.id);
+              /* VUE KANBAN */
+              <div style={{display:'flex',gap:12,overflowX:'auto',WebkitOverflowScrolling:'touch',alignItems:'flex-start',paddingBottom:8}}>
+                {kanbanCols.map((col,ci)=>{
+                  const colVehicles=filtered.filter(v=>(v.kanbanCol||kanbanCols[0]?.id)===col.id);
+                  const isEditingCol=editingColId===col.id;
                   return (
-                    <div key={v.id} style={{background:P.card,borderRadius:12,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',border:`1px solid ${P.border}`}}>
-                      {v.photo
-                        ? <div style={{width:'100%',height:160,overflow:'hidden',background:'#f0f0f0'}}><img src={v.photo} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
-                        : <div style={{width:'100%',height:70,background:P.accentSoft,display:'flex',alignItems:'center',justifyContent:'center',opacity:0.4}}><IconCar/></div>
-                      }
-                      <div style={{padding:14}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
-                          <div>
-                            <div style={{fontSize:15,fontWeight:700,color:P.accent}}>{v.marque} {v.modele}</div>
-                            <div style={{fontSize:12,color:P.textSoft,marginTop:1}}>{v.immatriculation}</div>
-                          </div>
-                          <div style={{display:'flex',gap:4}}>
-                            <button style={{...ibtn,background:P.accentSoft,borderRadius:8}} onClick={()=>openEdit(v)}><span style={{color:P.accent}}><IconPencil/></span></button>
-                            <button style={{...ibtn,background:P.redSoft,borderRadius:8}} onClick={()=>setDeleteConfirm(v.id)}><span style={{color:P.red}}><IconTrash/></span></button>
-                          </div>
-                        </div>
-                        <div style={{display:'flex',gap:5,marginBottom:8,flexWrap:'wrap'}}>
-                          <FuelTag carburant={v.carburant}/>
-                          <TvaTag tva={v.tva}/>
-                          <DaysBadge dateAchat={v.dateAchat}/>
-                        </div>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                          <div><div style={{fontSize:10,color:P.textSoft}}>Vente</div><div style={{fontSize:18,fontWeight:700,color:P.accent}}>{dp.vente}</div></div>
-                          <MarginBadge v={v} compact/>
-                        </div>
+                    <div key={col.id} style={{minWidth:250,width:250,flexShrink:0}}>
+                      {/* En-tête colonne */}
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,padding:'4px 2px'}}>
+                        {isEditingCol
+                          ?<input autoFocus value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)} onBlur={()=>saveColName(col.id)} onKeyDown={e=>{if(e.key==='Enter')saveColName(col.id);if(e.key==='Escape')setEditingColId(null);}} style={{flex:1,border:'none',outline:`2px solid ${P.accent}`,borderRadius:6,padding:'4px 8px',fontSize:13,fontWeight:700,fontFamily:'inherit',background:P.card}}/>
+                          :<span onClick={()=>{setEditingColId(col.id);setEditingColLabel(col.label);}} title="Cliquer pour renommer" style={{flex:1,fontWeight:700,fontSize:13,cursor:'text',color:P.text,padding:'4px 2px'}}>{col.label}</span>
+                        }
+                        <span style={{background:P.accentSoft,color:P.accent,fontSize:11,fontWeight:700,padding:'1px 8px',borderRadius:10,flexShrink:0}}>{colVehicles.length}</span>
+                        {kanbanCols.length>1&&(
+                          <button title="Supprimer cette étape" onClick={()=>{const rest=kanbanCols.filter(c=>c.id!==col.id);const dest=rest[Math.max(0,ci-1)]?.id||'';colVehicles.forEach(v=>updateVehicle(v.id,{kanbanCol:dest}));setKanbanCols(rest);}} style={{background:'none',border:'none',cursor:'pointer',color:P.textSoft,fontSize:16,padding:'2px 4px',borderRadius:4,lineHeight:1,flexShrink:0}}>×</button>
+                        )}
                       </div>
-                      {showSteps&&(
-                        <div>
-                          <button onClick={()=>toggleExpand(v.id)} style={{width:'100%',padding:'8px 14px',background:'#FAFBFC',border:'none',borderTop:`1px solid ${P.border}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12,fontWeight:600,color:P.textSoft}}>
-                            <span>Étapes</span><IconChevDown open={isExp}/>
-                          </button>
-                          {isExp&&<StepTracker vehicle={v} onUpdate={ns=>updateVehicleSteps(v.id,ns)} onUpdateDocs={d=>updateVehicleDocs(v.id,d)} mob={mob}/>}
-                        </div>
-                      )}
+                      {/* Cartes */}
+                      <div style={{background:P.bg,borderRadius:10,border:`1px solid ${P.border}`,padding:8,display:'flex',flexDirection:'column',gap:8,minHeight:100}}>
+                        {colVehicles.map(v=>{
+                          const dp=getDP(v); const prio=Number(v.priorite)||0;
+                          return (
+                            <div key={v.id} style={{background:P.card,borderRadius:8,border:`1px solid ${P.border}`,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+                              {v.photo
+                                ?<div style={{height:90,overflow:'hidden'}}><img src={v.photo} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
+                                :<div style={{height:32,background:P.accentSoft,display:'flex',alignItems:'center',justifyContent:'center',opacity:0.35}}><IconCar/></div>
+                              }
+                              <div style={{padding:'8px 10px'}}>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:13,fontWeight:700,color:P.accent,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.marque} {v.modele}</div>
+                                    <div style={{fontSize:11,color:P.textSoft}}>{v.immatriculation}</div>
+                                  </div>
+                                  {prio>0&&<span style={{color:PRIORITY_COLOR,fontSize:12,marginLeft:4,flexShrink:0,letterSpacing:0.5}}>{'★'.repeat(prio)}</span>}
+                                </div>
+                                <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:5}}>
+                                  <FuelTag carburant={v.carburant}/>
+                                  <DaysBadge dateAchat={v.dateAchat}/>
+                                </div>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                                  <span style={{fontSize:12,fontWeight:700,color:P.text}}>{dp.vente}</span>
+                                  <MarginBadge v={v} compact/>
+                                </div>
+                                <div style={{display:'flex',gap:4,paddingTop:6,borderTop:`1px solid ${P.border}`}}>
+                                  <button disabled={ci===0} onClick={()=>updateVehicle(v.id,{kanbanCol:kanbanCols[ci-1].id})} style={{flex:1,background:ci===0?'transparent':P.accentSoft,color:ci===0?P.textSoft:P.accent,border:'none',borderRadius:6,padding:'4px 0',cursor:ci===0?'default':'pointer',fontSize:13,opacity:ci===0?0.25:1}}>←</button>
+                                  <button onClick={()=>openEdit(v)} style={{background:P.accentSoft,color:P.accent,border:'none',borderRadius:6,padding:'4px 7px',cursor:'pointer',display:'flex',alignItems:'center'}}><IconPencil/></button>
+                                  <button onClick={()=>setDeleteConfirm(v.id)} style={{background:P.redSoft,color:P.red,border:'none',borderRadius:6,padding:'4px 7px',cursor:'pointer',display:'flex',alignItems:'center'}}><IconTrash/></button>
+                                  <button disabled={ci===kanbanCols.length-1} onClick={()=>updateVehicle(v.id,{kanbanCol:kanbanCols[ci+1].id})} style={{flex:1,background:ci===kanbanCols.length-1?'transparent':P.accentSoft,color:ci===kanbanCols.length-1?P.textSoft:P.accent,border:'none',borderRadius:6,padding:'4px 0',cursor:ci===kanbanCols.length-1?'default':'pointer',fontSize:13,opacity:ci===kanbanCols.length-1?0.25:1}}>→</button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {colVehicles.length===0&&<div style={{textAlign:'center',padding:'18px 8px',color:P.textSoft,fontSize:12}}>Aucun véhicule</div>}
+                      </div>
                     </div>
                   );
                 })}
+                {/* Ajouter une colonne */}
+                <button onClick={()=>{const id='col_'+Date.now();setKanbanCols([...kanbanCols,{id,label:'Nouvelle étape'}]);setEditingColId(id);setEditingColLabel('Nouvelle étape');}} style={{minWidth:180,height:54,background:'transparent',border:`2px dashed ${P.border}`,borderRadius:10,cursor:'pointer',color:P.textSoft,fontSize:13,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:6,flexShrink:0,alignSelf:'flex-start',marginTop:38}}>
+                  <IconPlus/> Étape
+                </button>
               </div>
             ) : (
               /* VUE LISTE */

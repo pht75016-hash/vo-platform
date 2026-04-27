@@ -69,11 +69,17 @@ export const useStore = create(persist(
     setModuleOrder: (order) => set({ moduleOrder: order }),
     stockListCols: ['priorite','marque','modele','carburant','km','jours','achat','vente','marge','tva'],
     setStockListCols: (cols) => set({ stockListCols: cols }),
+    kanbanCols: [
+      {id:'entree',     label:'Entrée stock'},
+      {id:'preparation',label:'En préparation'},
+      {id:'pret',       label:'Prêt à vendre'},
+      {id:'vendu',      label:'Vendu'},
+    ],
+    setKanbanCols: (cols) => set({ kanbanCols: cols }),
   }),
   {
     name: 'vo_platform',
     version: 1,
-    // user n'est pas persisté localement (re-validé via supabase.auth.getSession)
     partialize: (s) => ({
       vehicles: s.vehicles,
       contacts: s.contacts,
@@ -81,6 +87,7 @@ export const useStore = create(persist(
       theme: s.theme,
       moduleOrder: s.moduleOrder,
       stockListCols: s.stockListCols,
+      kanbanCols: s.kanbanCols,
     }),
   }
 ))
