@@ -31,7 +31,7 @@ export const EMPTY_FORM = {
   carburant:"",capaciteBatterie:"",chargeurAC:true,chargeurDC:false,typeDC:"COMBO CCS",
   puissanceAC:"",puissanceDC:"",kilometrage:"",dateMEC:"",boite:"",categorie:"",
   nbPlaces:"5",tva:"TVA sur marge",prixAchatHT:"",prixAchatTTC:"",prixVenteHT:"",
-  prixVenteTTC:"",puissanceFiscale:"",vin:"",photo:"",
+  prixVenteTTC:"",puissanceFiscale:"",vin:"",photo:"",emplacement:"",
   steps:JSON.parse(JSON.stringify(DEFAULT_STEPS))
 };
 

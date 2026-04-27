@@ -451,6 +451,7 @@ export default function Stock() {
                 <div style={grp}><label style={lbl}>VIN</label><input style={{...inp('vin',false),fontFamily:'monospace',letterSpacing:1}} value={form.vin} onChange={e=>updateField('vin',e.target.value.toUpperCase())} maxLength={17} placeholder="17 car."/></div>
                 <div style={grp}><label style={lbl}>Date achat (Cerfa)</label><input style={inp('dateAchat',false)} type="datetime-local" value={form.dateAchat} onChange={e=>updateField('dateAchat',e.target.value)}/></div>
                 <div style={grp}><label style={lbl}>Date MEC</label><input style={inp('dateMEC',false)} type="date" value={form.dateMEC} onChange={e=>updateField('dateMEC',e.target.value)}/></div>
+                <div style={{...grp,gridColumn:'1/-1'}}><label style={lbl}>Emplacement</label><input style={inp('emplacement',false)} value={form.emplacement||''} onChange={e=>updateField('emplacement',e.target.value)} placeholder="Ex : Hall A, Parking 3, Extérieur..."/></div>
 
                 <div style={sec_}>Véhicule</div>
                 <div style={grp}><label style={lbl}>Marque *</label><select style={sel('marque',true)} value={form.marque} onChange={e=>updateField('marque',e.target.value)}><option value="">Sélectionner</option>{Object.keys(MQ).sort().map(m=><option key={m}>{m}</option>)}</select>{attempted&&!form.marque&&<span style={{fontSize:11,color:P.red}}>Obligatoire</span>}</div>
