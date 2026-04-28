@@ -7,17 +7,22 @@ import { fmtP, daysInStock } from '../../utils/formatters'
 
 // ── KPI Card ───────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, sub }) {
+function KpiCard({ label, value, sub, onClick, badge }) {
   const t = useTheme()
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: t.bgSurface,
       border: `0.5px solid ${t.border}`,
       borderRadius: 10,
       padding: '16px 18px',
       flex: 1,
       minWidth: 130,
-    }}>
+      cursor: onClick ? 'pointer' : 'default',
+      transition: 'border-color 0.15s',
+    }}
+    onMouseEnter={e=>{ if(onClick) e.currentTarget.style.borderColor='#2563EB'; }}
+    onMouseLeave={e=>{ if(onClick) e.currentTarget.style.borderColor=''; }}
+    >
       <div style={{
         fontSize: 11, color: '#888', textTransform: 'uppercase',
         letterSpacing: '0.5px', marginBottom: 10, fontWeight: 500,
@@ -123,11 +128,17 @@ export function Home() {
 
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
+  const [showStockHT, setShowStockHT] = useState(false)
 
   // KPIs — statut is the canonical field name (storage.js normalises legacy .status → .statut)
   const enStock   = vehicles.filter((v) => (v.statut || v.status) === 'stock')
   const vendus30j = vehicles.filter((v) => (v.statut || v.status) === 'vendu')
   const valeurStock = enStock.reduce((sum, v) => sum + (Number(v.prixVenteTTC || v.prixVente || v.prixTTC) || 0), 0)
+  const valeurStockHT = enStock.reduce((sum, v) => {
+    const ttc = Number(v.prixVenteTTC || v.prixVente || v.prixTTC) || 0
+    const ht = v.tva === 'TVA déductible' ? (Number(v.prixVenteHT) || ttc / 1.2) : ttc / 1.2
+    return sum + ht
+  }, 0)
   const delaiMoyen = enStock.length
     ? Math.round(enStock.reduce((sum, v) => sum + (daysInStock(v.dateAchat || v.datePurchase) || 0), 0) / enStock.length)
     : null
@@ -171,7 +182,12 @@ export function Home() {
       }}>
         <KpiCard label="En stock" value={enStock.length} sub="véhicules actifs" />
         <KpiCard label="Vendus" value={vendus30j.length} sub="total" />
-        <KpiCard label="Valeur stock" value={valeurStock > 0 ? fmtP(valeurStock) : '—'} sub="prix de vente" />
+        <KpiCard
+          label="Valeur stock"
+          value={valeurStock > 0 ? fmtP(showStockHT ? valeurStockHT : valeurStock) : '—'}
+          sub={showStockHT ? '≈ hors taxes' : 'prix de vente TTC'}
+          onClick={valeurStock > 0 ? () => setShowStockHT(v => !v) : undefined}
+        />
         <KpiCard label="Délai moyen" value={delaiMoyen != null ? `${delaiMoyen}j` : '—'} sub="jours en stock" />
       </div>
 
