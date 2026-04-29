@@ -626,6 +626,7 @@ export default function Stock() {
                 <div style={{fontSize:13,color:P.textSoft,marginBottom:20}}>{v.marque} {v.modele} — {v.immatriculation}</div>
                 <div style={{display:'flex',gap:10}}>
                   <button style={{background:P.bg,color:P.text,border:`1px solid ${P.border}`,borderRadius:8,padding:'10px',fontSize:13,fontWeight:600,cursor:'pointer',flex:1}} onClick={()=>setDeleteConfirm(null)}>Annuler</button>
+                  <button style={{background:P.orange,color:'#fff',border:'none',borderRadius:8,padding:'10px',fontSize:13,fontWeight:600,cursor:'pointer',flex:1}} onClick={()=>{ updateVehicle(deleteConfirm,{statut:'vendu'}); setDeleteConfirm(null); }}>Vendu</button>
                   <button style={{background:P.red,color:'#fff',border:'none',borderRadius:8,padding:'10px',fontSize:13,fontWeight:600,cursor:'pointer',flex:1}} onClick={()=>handleDelete(deleteConfirm)}>Supprimer</button>
                 </div>
               </div>
