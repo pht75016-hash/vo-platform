@@ -3,37 +3,42 @@ import { useStore } from '../store/useStore'
 import { upsertVehicle } from '../utils/storage'
 
 export function SaveIndicator() {
-  const vehicles = useStore(s => s.vehicles)
-  const user = useStore(s => s.user)
-  const [status, setStatus] = useState(null) // null | 'saving' | 'saved'
+  const [status, setStatus] = useState(null)
   const timerRef = useRef(null)
-  const hideRef = useRef(null)
-  const initRef = useRef(true)
+  const hideRef  = useRef(null)
 
   useEffect(() => {
-    // Skip the very first render (initial hydration from localStorage / Supabase load)
-    if (initRef.current) { initRef.current = false; return }
-    if (!user?.id) return
+    // subscribe runs outside React's render cycle — immune to Strict Mode
+    // double-invocation. Fires only when vehicles reference actually changes.
+    const unsub = useStore.subscribe((state, prev) => {
+      if (state.vehicles === prev.vehicles) return
+      const uid = state.user?.id
+      if (!uid) return
 
-    setStatus('saving')
-    clearTimeout(timerRef.current)
-    clearTimeout(hideRef.current)
+      setStatus('saving')
+      clearTimeout(timerRef.current)
+      clearTimeout(hideRef.current)
 
-    timerRef.current = setTimeout(async () => {
-      try {
-        await Promise.all(vehicles.map(v => upsertVehicle(v, user.id)))
-        setStatus('saved')
-        hideRef.current = setTimeout(() => setStatus(null), 3000)
-      } catch {
-        setStatus(null)
-      }
-    }, 2000)
+      timerRef.current = setTimeout(async () => {
+        // Re-read latest state at fire time (debounce may have batched edits)
+        const { vehicles, user } = useStore.getState()
+        if (!user?.id) return
+        try {
+          await Promise.all(vehicles.map(v => upsertVehicle(v, user.id)))
+          setStatus('saved')
+          hideRef.current = setTimeout(() => setStatus(null), 3000)
+        } catch {
+          setStatus(null)
+        }
+      }, 2000)
+    })
 
     return () => {
+      unsub()
       clearTimeout(timerRef.current)
       clearTimeout(hideRef.current)
     }
-  }, [vehicles])
+  }, [])
 
   if (!status) return null
 
