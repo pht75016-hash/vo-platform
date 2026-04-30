@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
+import { SaveIndicator } from './components/SaveIndicator'
 import { Home } from './modules/home/Home'
 import Stock from './modules/stock/Stock'
 import { Crm } from './modules/crm/Crm'
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="*"          element={<div style={{ padding: 8, color: '#888' }}>Page introuvable.</div>} />
         </Routes>
       </AppShell>
+      <SaveIndicator />
     </BrowserRouter>
   )
 }

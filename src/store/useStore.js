@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { upsertVehicle, removeVehicle } from '../utils/storage'
+import { removeVehicle } from '../utils/storage'
 
 export const useStore = create(persist(
   (set, get) => ({
@@ -17,26 +17,11 @@ export const useStore = create(persist(
     vehicles: [],
     setVehicles: (vehicles) => set({ vehicles }),
 
-    addVehicle: (v) => {
-      set((s) => ({ vehicles: [v, ...s.vehicles] }))
-      const uid = get().user?.id
-      if (uid) upsertVehicle(v, uid)
-        .then(() => set({ syncError: null }))
-        .catch((err) => set({ syncError: err.message }))
-    },
+    addVehicle: (v) => set((s) => ({ vehicles: [v, ...s.vehicles] })),
 
-    updateVehicle: (id, data) => {
-      set((s) => ({
-        vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...data } : v),
-      }))
-      const uid = get().user?.id
-      if (uid) {
-        const updated = get().vehicles.find((v) => v.id === id)
-        if (updated) upsertVehicle(updated, uid)
-          .then(() => set({ syncError: null }))
-          .catch((err) => set({ syncError: err.message }))
-      }
-    },
+    updateVehicle: (id, data) => set((s) => ({
+      vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...data } : v),
+    })),
 
     deleteVehicle: (id) => {
       set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) }))
