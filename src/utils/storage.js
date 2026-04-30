@@ -71,3 +71,32 @@ export async function removeVehicle(id) {
   const { error } = await supabase.from('vehicles').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── Notes CRUD ─────────────────────────────────────────────────────────────
+// Schéma : notes(id text PK, user_id uuid FK, data jsonb, updated_at timestamptz)
+
+export async function fetchNotes() {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('data')
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return data.map(row => row.data)
+}
+
+export async function upsertNote(note, userId) {
+  const { error } = await supabase
+    .from('notes')
+    .upsert({
+      id: note.id,
+      user_id: userId,
+      data: note,
+      updated_at: new Date().toISOString(),
+    })
+  if (error) throw error
+}
+
+export async function deleteNote(id) {
+  const { error } = await supabase.from('notes').delete().eq('id', id)
+  if (error) throw error
+}

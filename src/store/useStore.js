@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { removeVehicle } from '../utils/storage'
+import { removeVehicle, deleteNote } from '../utils/storage'
 
 export const useStore = create(persist(
   (set, get) => ({
@@ -29,6 +29,16 @@ export const useStore = create(persist(
       if (uid) removeVehicle(id)
         .then(() => set({ syncError: null }))
         .catch((err) => set({ syncError: err.message }))
+    },
+
+    // ── Notes ───────────────────────────────────────────────────────────────
+    notes: [],
+    setNotes: (notes) => set({ notes }),
+    addNote: (n) => set((s) => ({ notes: [n, ...s.notes] })),
+    removeNote: (id) => {
+      set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
+      const uid = get().user?.id
+      if (uid) deleteNote(id).catch(() => {})
     },
 
     // ── Contacts ────────────────────────────────────────────────────────────
@@ -67,6 +77,7 @@ export const useStore = create(persist(
     version: 1,
     partialize: (s) => ({
       vehicles: s.vehicles,
+      notes: s.notes,
       contacts: s.contacts,
       userProfile: s.userProfile,
       theme: s.theme,

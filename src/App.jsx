@@ -12,27 +12,37 @@ import { Location } from './modules/location/Location'
 import { Login } from './modules/auth/Login'
 import { supabase } from './utils/supabase'
 import { useStore } from './store/useStore'
-import { fetchVehicles, upsertVehicle } from './utils/storage'
+import { fetchVehicles, upsertVehicle, fetchNotes, upsertNote } from './utils/storage'
 
 export default function App() {
   const user = useStore((s) => s.user)
   const setUser = useStore((s) => s.setUser)
   const setVehicles = useStore((s) => s.setVehicles)
+  const setNotes = useStore((s) => s.setNotes)
   const realtimeChannel = useRef(null)
 
   async function loadFromSupabase(userId) {
     try {
-      const remote = await fetchVehicles()
+      const [remoteVehicles, remoteNotes] = await Promise.all([
+        fetchVehicles(),
+        fetchNotes(),
+      ])
 
-      if (remote.length > 0) {
-        // Supabase a des données → source de vérité
-        setVehicles(remote)
+      if (remoteVehicles.length > 0) {
+        setVehicles(remoteVehicles)
       } else {
-        // Supabase vide → on remonte les données locales si elles existent
         const local = useStore.getState().vehicles
-        if (local.length > 0 && userId) {
+        if (local.length > 0) {
           await Promise.all(local.map(v => upsertVehicle(v, userId)))
-          // Pas besoin de setVehicles : local est déjà correct
+        }
+      }
+
+      if (remoteNotes.length > 0) {
+        setNotes(remoteNotes)
+      } else {
+        const local = useStore.getState().notes
+        if (local.length > 0) {
+          await Promise.all(local.map(n => upsertNote(n, userId)))
         }
       }
     } catch (err) {
@@ -43,8 +53,12 @@ export default function App() {
   function subscribeRealtime() {
     if (realtimeChannel.current) supabase.removeChannel(realtimeChannel.current)
     realtimeChannel.current = supabase
-      .channel('vehicles-sync')
+      .channel('data-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => {
+        const uid = useStore.getState().user?.id
+        if (uid) loadFromSupabase(uid)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
         const uid = useStore.getState().user?.id
         if (uid) loadFromSupabase(uid)
       })

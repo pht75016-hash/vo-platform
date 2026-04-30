@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { upsertVehicle } from '../utils/storage'
+import { upsertVehicle, upsertNote } from '../utils/storage'
 
 export function SaveIndicator() {
   const [status, setStatus] = useState(null)
@@ -8,10 +8,10 @@ export function SaveIndicator() {
   const hideRef  = useRef(null)
 
   useEffect(() => {
-    // subscribe runs outside React's render cycle — immune to Strict Mode
-    // double-invocation. Fires only when vehicles reference actually changes.
     const unsub = useStore.subscribe((state, prev) => {
-      if (state.vehicles === prev.vehicles) return
+      const vehiclesChanged = state.vehicles !== prev.vehicles
+      const notesChanged    = state.notes    !== prev.notes
+      if (!vehiclesChanged && !notesChanged) return
       const uid = state.user?.id
       if (!uid) return
 
@@ -20,11 +20,13 @@ export function SaveIndicator() {
       clearTimeout(hideRef.current)
 
       timerRef.current = setTimeout(async () => {
-        // Re-read latest state at fire time (debounce may have batched edits)
-        const { vehicles, user } = useStore.getState()
+        const { vehicles, notes, user } = useStore.getState()
         if (!user?.id) return
         try {
-          await Promise.all(vehicles.map(v => upsertVehicle(v, user.id)))
+          await Promise.all([
+            ...vehicles.map(v => upsertVehicle(v, user.id)),
+            ...notes.map(n => upsertNote(n, user.id)),
+          ])
           setStatus('saved')
           hideRef.current = setTimeout(() => setStatus(null), 3000)
         } catch {

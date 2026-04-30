@@ -1,28 +1,22 @@
 import { useState } from 'react'
 import { useTheme } from '../../utils/theme'
 import { useIsMobile } from '../../hooks/useIsMobile'
+import { useStore } from '../../store/useStore'
 
 export function Notes() {
   const t = useTheme()
   const isMobile = useIsMobile()
+  const notes     = useStore(s => s.notes)
+  const addNote   = useStore(s => s.addNote)
+  const removeNote = useStore(s => s.removeNote)
 
-  const [notes, setNotes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('vo_notes') || '[]') } catch { return [] }
-  })
   const [text, setText] = useState('')
-
-  const save = (updated) => {
-    setNotes(updated)
-    localStorage.setItem('vo_notes', JSON.stringify(updated))
-  }
 
   const add = () => {
     if (!text.trim()) return
-    save([{ id: crypto.randomUUID(), content: text.trim(), createdAt: new Date().toISOString() }, ...notes])
+    addNote({ id: crypto.randomUUID(), content: text.trim(), createdAt: new Date().toISOString() })
     setText('')
   }
-
-  const remove = (id) => save(notes.filter((n) => n.id !== id))
 
   return (
     <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", maxWidth: 640 }}>
@@ -58,7 +52,7 @@ export function Notes() {
             display: 'flex', justifyContent: 'space-between', gap: 10,
           }}>
             <span style={{ fontSize: 14, whiteSpace: 'pre-wrap', flex: 1, color: t.text, lineHeight: 1.5 }}>{n.content}</span>
-            <button onClick={() => remove(n.id)} style={{
+            <button onClick={() => removeNote(n.id)} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: t.textMuted, fontSize: 18, padding: 0, flexShrink: 0, lineHeight: 1,
             }}>×</button>
