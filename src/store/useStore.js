@@ -35,6 +35,9 @@ export const useStore = create(persist(
     notes: [],
     setNotes: (notes) => set({ notes }),
     addNote: (n) => set((s) => ({ notes: [n, ...s.notes] })),
+    updateNote: (id, data) => set((s) => ({
+      notes: s.notes.map((n) => n.id === id ? { ...n, ...data } : n),
+    })),
     removeNote: (id) => {
       set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
       const uid = get().user?.id
