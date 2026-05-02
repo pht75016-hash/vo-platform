@@ -145,41 +145,38 @@ export function Notes() {
           onChange={(e) => { baseTextRef.current = e.target.value; setText(e.target.value) }}
           onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) add() }}
         />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {/* Bouton micro */}
-          {SpeechRecognition ? (
-            <button
-              onClick={toggleMic}
-              title={isRecording ? 'Arrêter l\'enregistrement' : 'Dicter une note (fr-FR)'}
-              style={{
-                width: 32, height: 32, borderRadius: 7, flexShrink: 0,
-                border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
-                background: isRecording ? '#EF4444' : 'transparent',
-                color: isRecording ? '#fff' : t.textSecondary,
-                fontSize: 15, cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.2s, border-color 0.2s',
-                boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.2)' : 'none',
-              }}
-            >
-              🎤
-            </button>
-          ) : (
-            <div title="Reconnaissance vocale non supportée par ce navigateur"
-              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', fontSize: 15, opacity: 0.3, cursor: 'default' }}>
-              🎤
-            </div>
-          )}
-          {/* Bouton Ajouter */}
-          <button onClick={add} style={{
-            height: 32, padding: '0 16px', borderRadius: 7,
-            background: t.accent, color: '#fff', fontSize: 13, fontWeight: 500,
-            border: 'none', cursor: 'pointer', flexShrink: 0,
-          }}>
-            Ajouter
-          </button>
-        </div>
+
+        {/* Bouton micro */}
+        <button
+          onClick={SpeechRecognition ? toggleMic : undefined}
+          title={
+            !SpeechRecognition ? 'Reconnaissance vocale non supportée par ce navigateur'
+            : isRecording ? 'Arrêter l\'enregistrement'
+            : 'Dicter une note (fr-FR)'
+          }
+          style={{
+            width: 34, height: 34, borderRadius: 7, flexShrink: 0,
+            border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
+            background: isRecording ? '#EF4444' : t.bgSurface,
+            color: isRecording ? '#fff' : t.text,
+            fontSize: 16, cursor: SpeechRecognition ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.2s, border-color 0.2s',
+            boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.18)' : 'none',
+            opacity: SpeechRecognition ? 1 : 0.45,
+          }}
+        >
+          🎤
+        </button>
+
+        {/* Bouton Ajouter */}
+        <button onClick={add} style={{
+          height: 34, padding: '0 16px', borderRadius: 7,
+          background: t.accent, color: '#fff', fontSize: 13, fontWeight: 500,
+          border: 'none', cursor: 'pointer', flexShrink: 0,
+        }}>
+          Ajouter
+        </button>
       </div>
 
       {/* Liste des notes */}
