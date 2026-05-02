@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Anthropic from '@anthropic-ai/sdk'
 import { useTheme } from '../../utils/theme'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -17,9 +17,51 @@ export function Notes() {
   const updateNote = useStore(s => s.updateNote)
   const removeNote = useStore(s => s.removeNote)
 
-  const [text, setText]         = useState('')
-  const [loadingAI, setLoadingAI] = useState(null)   // note id en cours de traitement
-  const [aiError, setAiError]   = useState({})      // { [noteId]: message }
+  const [text, setText]           = useState('')
+  const [loadingAI, setLoadingAI] = useState(null)
+  const [aiError, setAiError]     = useState({})
+  const [isRecording, setIsRecording] = useState(false)
+
+  // ── Reconnaissance vocale ──────────────────────────────────────────────────
+  const SpeechRecognition = typeof window !== 'undefined'
+    && (window.SpeechRecognition || window.webkitSpeechRecognition)
+  const recogRef  = useRef(null)   // instance SpeechRecognition
+  const baseTextRef = useRef('')   // texte avant démarrage du micro
+
+  const toggleMic = () => {
+    if (!SpeechRecognition) return
+    if (isRecording) {
+      recogRef.current?.stop()
+      return
+    }
+    const recog = new SpeechRecognition()
+    recog.lang = 'fr-FR'
+    recog.continuous = true
+    recog.interimResults = true
+    baseTextRef.current = text
+
+    recog.onresult = (e) => {
+      let final = '', interim = ''
+      for (const res of e.results) {
+        if (res.isFinal) final += res[0].transcript
+        else interim += res[0].transcript
+      }
+      setText(baseTextRef.current + (baseTextRef.current && (final||interim) ? ' ' : '') + final + interim)
+    }
+
+    recog.onerror = (e) => {
+      if (e.error !== 'no-speech') console.warn('Speech error:', e.error)
+    }
+
+    recog.onend = () => setIsRecording(false)
+
+    recogRef.current = recog
+    recog.start()
+    setIsRecording(true)
+  }
+
+  // Arrêt propre si le composant se démonte
+  useEffect(() => () => recogRef.current?.stop(), [])
 
   // ── Ajout ──────────────────────────────────────────────────────────────────
   const add = () => {
@@ -92,23 +134,52 @@ export function Notes() {
           rows={2}
           style={{
             flex: 1, boxSizing: 'border-box', padding: '8px 10px',
-            border: `0.5px solid ${t.borderLight}`, borderRadius: 7,
-            background: t.bgSurface, color: t.text,
+            border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
+            borderRadius: 7, background: t.bgSurface, color: t.text,
             fontSize: isMobile ? 16 : 13, resize: 'vertical',
             fontFamily: "'DM Sans', system-ui, sans-serif", outline: 'none',
+            transition: 'border-color 0.2s',
           }}
-          placeholder="Nouvelle note… (⌘↵ pour valider)"
+          placeholder={isRecording ? '🎤 Parlez…' : 'Nouvelle note… (⌘↵ pour valider)'}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { baseTextRef.current = e.target.value; setText(e.target.value) }}
           onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) add() }}
         />
-        <button onClick={add} style={{
-          height: 32, padding: '0 16px', borderRadius: 7,
-          background: t.accent, color: '#fff', fontSize: 13, fontWeight: 500,
-          border: 'none', cursor: 'pointer', flexShrink: 0,
-        }}>
-          Ajouter
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Bouton micro */}
+          {SpeechRecognition ? (
+            <button
+              onClick={toggleMic}
+              title={isRecording ? 'Arrêter l\'enregistrement' : 'Dicter une note (fr-FR)'}
+              style={{
+                width: 32, height: 32, borderRadius: 7, flexShrink: 0,
+                border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
+                background: isRecording ? '#EF4444' : 'transparent',
+                color: isRecording ? '#fff' : t.textSecondary,
+                fontSize: 15, cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.2s, border-color 0.2s',
+                boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.2)' : 'none',
+              }}
+            >
+              🎤
+            </button>
+          ) : (
+            <div title="Reconnaissance vocale non supportée par ce navigateur"
+              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: 15, opacity: 0.3, cursor: 'default' }}>
+              🎤
+            </div>
+          )}
+          {/* Bouton Ajouter */}
+          <button onClick={add} style={{
+            height: 32, padding: '0 16px', borderRadius: 7,
+            background: t.accent, color: '#fff', fontSize: 13, fontWeight: 500,
+            border: 'none', cursor: 'pointer', flexShrink: 0,
+          }}>
+            Ajouter
+          </button>
+        </div>
       </div>
 
       {/* Liste des notes */}
