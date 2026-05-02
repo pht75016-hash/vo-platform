@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import Anthropic from '@anthropic-ai/sdk'
 import { useTheme } from '../../utils/theme'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useStore } from '../../store/useStore'
-import { IconMic } from '../../components/Icons'
 
 const SYSTEM_PROMPT =
   "Tu es un assistant pour négociant automobile. Analyse cette note et extrais une liste de tâches structurées. " +
@@ -18,51 +17,9 @@ export function Notes() {
   const updateNote = useStore(s => s.updateNote)
   const removeNote = useStore(s => s.removeNote)
 
-  const [text, setText]           = useState('')
-  const [loadingAI, setLoadingAI] = useState(null)
-  const [aiError, setAiError]     = useState({})
-  const [isRecording, setIsRecording] = useState(false)
-
-  // ── Reconnaissance vocale ──────────────────────────────────────────────────
-  const SpeechRecognition = typeof window !== 'undefined'
-    && (window.SpeechRecognition || window.webkitSpeechRecognition)
-  const recogRef  = useRef(null)   // instance SpeechRecognition
-  const baseTextRef = useRef('')   // texte avant démarrage du micro
-
-  const toggleMic = () => {
-    if (!SpeechRecognition) return
-    if (isRecording) {
-      recogRef.current?.stop()
-      return
-    }
-    const recog = new SpeechRecognition()
-    recog.lang = 'fr-FR'
-    recog.continuous = true
-    recog.interimResults = true
-    baseTextRef.current = text
-
-    recog.onresult = (e) => {
-      let final = '', interim = ''
-      for (const res of e.results) {
-        if (res.isFinal) final += res[0].transcript
-        else interim += res[0].transcript
-      }
-      setText(baseTextRef.current + (baseTextRef.current && (final||interim) ? ' ' : '') + final + interim)
-    }
-
-    recog.onerror = (e) => {
-      if (e.error !== 'no-speech') console.warn('Speech error:', e.error)
-    }
-
-    recog.onend = () => setIsRecording(false)
-
-    recogRef.current = recog
-    recog.start()
-    setIsRecording(true)
-  }
-
-  // Arrêt propre si le composant se démonte
-  useEffect(() => () => recogRef.current?.stop(), [])
+  const [text, setText]         = useState('')
+  const [loadingAI, setLoadingAI] = useState(null)   // note id en cours de traitement
+  const [aiError, setAiError]   = useState({})      // { [noteId]: message }
 
   // ── Ajout ──────────────────────────────────────────────────────────────────
   const add = () => {
@@ -135,44 +92,18 @@ export function Notes() {
           rows={2}
           style={{
             flex: 1, boxSizing: 'border-box', padding: '8px 10px',
-            border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
-            borderRadius: 7, background: t.bgSurface, color: t.text,
+            border: `0.5px solid ${t.borderLight}`, borderRadius: 7,
+            background: t.bgSurface, color: t.text,
             fontSize: isMobile ? 16 : 13, resize: 'vertical',
             fontFamily: "'DM Sans', system-ui, sans-serif", outline: 'none',
-            transition: 'border-color 0.2s',
           }}
-          placeholder={isRecording ? '🎤 Parlez…' : 'Nouvelle note… (⌘↵ pour valider)'}
+          placeholder="Nouvelle note… (⌘↵ pour valider)"
           value={text}
-          onChange={(e) => { baseTextRef.current = e.target.value; setText(e.target.value) }}
+          onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) add() }}
         />
-
-        {/* Bouton micro */}
-        <button
-          onClick={SpeechRecognition ? toggleMic : undefined}
-          title={
-            !SpeechRecognition ? 'Reconnaissance vocale non supportée par ce navigateur'
-            : isRecording ? 'Arrêter l\'enregistrement'
-            : 'Dicter une note (fr-FR)'
-          }
-          style={{
-            width: 34, height: 34, borderRadius: 7, flexShrink: 0,
-            border: `1px solid ${isRecording ? '#EF4444' : '#D1D5DB'}`,
-            background: isRecording ? '#EF4444' : '#F9FAFB',
-            color: isRecording ? '#fff' : '#374151',
-            cursor: SpeechRecognition ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.2s, border-color 0.2s',
-            boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.2)' : 'none',
-            opacity: SpeechRecognition ? 1 : 0.4,
-          }}
-        >
-          <IconMic />
-        </button>
-
-        {/* Bouton Ajouter */}
         <button onClick={add} style={{
-          height: 34, padding: '0 16px', borderRadius: 7,
+          height: 32, padding: '0 16px', borderRadius: 7,
           background: t.accent, color: '#fff', fontSize: 13, fontWeight: 500,
           border: 'none', cursor: 'pointer', flexShrink: 0,
         }}>
