@@ -18,8 +18,8 @@ export function Notes() {
   const removeNote = useStore(s => s.removeNote)
 
   const [text, setText]         = useState('')
-  const [loadingAI, setLoadingAI] = useState(null) // note id en cours de traitement
-  const [aiError, setAiError]   = useState(null)   // note id en erreur
+  const [loadingAI, setLoadingAI] = useState(null)   // note id en cours de traitement
+  const [aiError, setAiError]   = useState({})      // { [noteId]: message }
 
   // ── Ajout ──────────────────────────────────────────────────────────────────
   const add = () => {
@@ -29,15 +29,18 @@ export function Notes() {
   }
 
   // ── Appel IA ───────────────────────────────────────────────────────────────
+  const setErr = (id, msg) => {
+    setAiError(prev => ({ ...prev, [id]: msg }))
+    setTimeout(() => setAiError(prev => { const n={...prev}; delete n[id]; return n }), 5000)
+  }
+
   const organizeWithAI = async (note) => {
     const apiKey = import.meta.env.VITE_ANTHROPIC_KEY
     if (!apiKey) {
-      setAiError(note.id)
-      setTimeout(() => setAiError(null), 4000)
+      setErr(note.id, 'Clé VITE_ANTHROPIC_KEY manquante — configure-la dans Vercel ou .env.local')
       return
     }
     setLoadingAI(note.id)
-    setAiError(null)
     try {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
       const response = await client.messages.create({
@@ -47,9 +50,8 @@ export function Notes() {
         messages: [{ role: 'user', content: note.content }],
       })
       const raw  = response.content[0]?.text || '{}'
-      // Extrait le JSON même si le modèle entoure d'un code block markdown
       const json = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/```$/, '').trim())
-      const tasks = (json.tasks || []).map((t, i) => ({
+      const tasks = (json.tasks || []).map(t => ({
         id:            t.id || crypto.randomUUID(),
         label:         t.label || '',
         done:          Boolean(t.done),
@@ -58,8 +60,10 @@ export function Notes() {
       updateNote(note.id, { tasks })
     } catch (err) {
       console.error('AI error:', err)
-      setAiError(note.id)
-      setTimeout(() => setAiError(null), 4000)
+      const status = err?.status || err?.error?.status
+      if (status === 401) setErr(note.id, 'Clé API invalide (401) — vérifie VITE_ANTHROPIC_KEY')
+      else if (status === 429) setErr(note.id, 'Quota Anthropic dépassé (429)')
+      else setErr(note.id, `Erreur API : ${err?.message || 'inconnue'}`)
     } finally {
       setLoadingAI(null)
     }
@@ -113,7 +117,7 @@ export function Notes() {
           const tasks   = n.tasks || []
           const done    = tasks.filter(t => t.done).length
           const isLoading = loadingAI === n.id
-          const hasError  = aiError === n.id
+          const errorMsg  = aiError[n.id]
 
           return (
             <div key={n.id} style={card}>
@@ -191,10 +195,8 @@ export function Notes() {
                     : <>✨ Organiser avec l'IA</>
                   }
                 </button>
-                {hasError && (
-                  <span style={{ fontSize: 11, color: '#DC2626' }}>
-                    Erreur — vérifie la clé VITE_ANTHROPIC_KEY
-                  </span>
+                {errorMsg && (
+                  <span style={{ fontSize: 11, color: '#DC2626' }}>{errorMsg}</span>
                 )}
                 {tasks.length > 0 && !isLoading && (
                   <button
