@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { useTheme } from '../../utils/theme'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useStore } from '../../store/useStore'
+import { IconMic } from '../../components/Icons'
 
 const SYSTEM_PROMPT =
   "Tu es un assistant pour négociant automobile. Analyse cette note et extrais une liste de tâches structurées. " +
@@ -156,17 +157,17 @@ export function Notes() {
           }
           style={{
             width: 34, height: 34, borderRadius: 7, flexShrink: 0,
-            border: `0.5px solid ${isRecording ? '#EF4444' : t.borderLight}`,
-            background: isRecording ? '#EF4444' : t.bgSurface,
-            color: isRecording ? '#fff' : t.text,
-            fontSize: 16, cursor: SpeechRecognition ? 'pointer' : 'not-allowed',
+            border: `1px solid ${isRecording ? '#EF4444' : '#D1D5DB'}`,
+            background: isRecording ? '#EF4444' : '#F9FAFB',
+            color: isRecording ? '#fff' : '#374151',
+            cursor: SpeechRecognition ? 'pointer' : 'not-allowed',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'background 0.2s, border-color 0.2s',
-            boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.18)' : 'none',
-            opacity: SpeechRecognition ? 1 : 0.45,
+            boxShadow: isRecording ? '0 0 0 3px rgba(239,68,68,0.2)' : 'none',
+            opacity: SpeechRecognition ? 1 : 0.4,
           }}
         >
-          🎤
+          <IconMic />
         </button>
 
         {/* Bouton Ajouter */}
